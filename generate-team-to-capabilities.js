@@ -92,17 +92,21 @@ function generateTeamCapabilityMappings() {
 
 // Generate the Excel file
 const dataDir = './data';
+const teamsDir = `${dataDir}/teams`;
 
-console.log('\nStarting Excel file generation...');
-
-// Create data directory if it doesn't exist
+// Create directories if they don't exist
+console.log('Checking directories...');
 if (!fs.existsSync(dataDir)) {
   console.log('Creating data directory...');
   fs.mkdirSync(dataDir);
 }
+if (!fs.existsSync(teamsDir)) {
+  console.log('Creating teams directory...');
+  fs.mkdirSync(teamsDir);
+}
 
 // Generate and save the mappings
-console.log('Generating mappings...');
+console.log('Generating team capability mappings...');
 const mappings = generateTeamCapabilityMappings();
 
 console.log('Creating Excel workbook...');
@@ -110,8 +114,8 @@ const ws = XLSX.utils.json_to_sheet(mappings);
 const wb = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(wb, ws, "Team Capabilities");
 
-console.log('Writing Excel file...');
-const filePath = `${dataDir}/teams-to-capabilities.xlsx`;
-XLSX.writeFile(wb, filePath);
+const filename = `${teamsDir}/teams-to-capabilities.xlsx`;
+console.log(`Writing file: ${filename}`);
+XLSX.writeFile(wb, filename);
 
-console.log(`\nSuccess! File generated at: ${filePath}`); 
+console.log(`\nSuccess! File generated at: ${filename}`); 

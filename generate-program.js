@@ -71,38 +71,65 @@ const architects = [
 ];
 
 function generateProjects(programName) {
+  console.log(`\nGenerating projects for ${programName}...`);
   const projects = [];
   const projectCount = Math.floor(Math.random() * 11) + 10;
+  console.log(`Creating ${projectCount} projects...`);
+  
+  // Pre-calculate capabilities arrays for faster access
+  const businessCapabilitiesArr = [...businessCapabilities];
+  const itCapabilitiesArr = [...itCapabilities];
+  let totalCapabilities = 0;
   
   for (let i = 1; i <= projectCount; i++) {
     const isBusiness = programName === "Data Program" ? 
       Math.random() > 0.3 : Math.random() > 0.4;
     
-    const capabilityDomain = isBusiness ? "Business" : "IT";
-    const capabilityList = isBusiness ? businessCapabilities : itCapabilities;
+    // Generate 1 to 15 capabilities for this project
+    const capabilityCount = Math.floor(Math.random() * 15) + 1;
+    totalCapabilities += capabilityCount;
     
-    // Generate cost estimation (30% chance of being empty)
-    let costEstimation = '';
-    if (Math.random() > 0.3) {
-      // Generate cost between 100K and 10M euros
-      const cost = Math.floor(Math.random() * 9900000 + 100000);
-      // Format with euro symbol and thousands separator
-      costEstimation = `€${cost.toLocaleString('de-DE')}`;
-    }
+    // Create base project data
+    const projectName = generateProjectName(programName, i);
+    console.log(`  Project ${i}/${projectCount}: ${projectName} (${capabilityCount} capabilities)`);
     
-    projects.push({
+    const baseProject = {
       "Program Name": programName,
-      "Project Name": generateProjectName(programName, i),
+      "Project Name": projectName,
       "Phase": Math.random() > 0.5 ? "Initiation" : "Intake",
-      "Capability Domain": capabilityDomain,
-      "Capability Name": capabilityList[Math.floor(Math.random() * capabilityList.length)],
-      "Action": ["Create", "Update", "Delete"][Math.floor(Math.random() * 3)],
       "Delivery Period": generateDeliveryPeriod(),
       "Architect": architects[Math.floor(Math.random() * architects.length)],
-      "Total Cost Estimation": costEstimation
-    });
+      "Total Cost Estimation": Math.random() > 0.3 ? 
+        `€${Math.floor(Math.random() * 9900000 + 100000).toLocaleString('de-DE')}` : ''
+    };
+
+    // Generate multiple capabilities for the same project
+    const usedCapabilities = new Set();
+    for (let j = 0; j < capabilityCount; j++) {
+      const isDomainBusiness = isBusiness ? Math.random() > 0.2 : Math.random() > 0.8;
+      const capabilityPool = isDomainBusiness ? businessCapabilitiesArr : itCapabilitiesArr;
+      
+      let capability;
+      let attempts = 0;
+      do {
+        capability = capabilityPool[Math.floor(Math.random() * capabilityPool.length)];
+        attempts++;
+      } while (usedCapabilities.has(capability) && attempts < 20);
+      
+      if (!usedCapabilities.has(capability)) {
+        usedCapabilities.add(capability);
+        projects.push({
+          ...baseProject,
+          "Capability Domain": isDomainBusiness ? "Business" : "IT",
+          "Capability Name": capability,
+          "Action": ["Create", "Update", "Delete"][Math.floor(Math.random() * 3)]
+        });
+      }
+    }
   }
   
+  console.log(`  Total capabilities generated: ${totalCapabilities}`);
+  console.log(`  Average capabilities per project: ${(totalCapabilities/projectCount).toFixed(1)}`);
   return projects;
 }
 
@@ -133,17 +160,46 @@ function generateDeliveryPeriod() {
   
   // Generate all files
   const dataDir = './data';
+  const programsDir = `${dataDir}/programs`;
 
-  // Create data directory if it doesn't exist
+  // Create directories if they don't exist
+  console.log('Checking directories...');
   if (!fs.existsSync(dataDir)) {
+    console.log('Creating data directory...');
     fs.mkdirSync(dataDir);
   }
+  if (!fs.existsSync(programsDir)) {
+    console.log('Creating programs directory...');
+    fs.mkdirSync(programsDir);
+  }
 
-  programs.forEach(program => {
-    const ws = XLSX.utils.json_to_sheet(generateProjects(program));
+  console.log('Starting Excel file generation...');
+  console.log(`Found ${programs.length} programs to process`);
+
+  let totalProjects = 0;
+  let totalCapabilities = 0;
+
+  programs.forEach((program, index) => {
+    console.log(`\nProcessing program ${index + 1}/${programs.length}: ${program}`);
+    const projects = generateProjects(program);
+    totalProjects += projects.length;
+    totalCapabilities += projects.reduce((acc, curr) => acc + 1, 0);
+    
+    console.log('Creating Excel workbook...');
+    const ws = XLSX.utils.json_to_sheet(projects);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Projects");
-    XLSX.writeFile(wb, `${dataDir}/${program.replace(/ /g, '_')}.xlsx`);
+    
+    const filename = `${programsDir}/${program.replace(/ /g, '_')}.xlsx`;
+    console.log(`Writing file: ${filename}`);
+    XLSX.writeFile(wb, filename);
   });
-  
-  console.log("Generated XLSX files in /data folder!");
+
+  console.log('\nGeneration Summary:');
+  console.log('------------------');
+  console.log(`Total programs processed: ${programs.length}`);
+  console.log(`Total projects generated: ${totalProjects}`);
+  console.log(`Total capability mappings: ${totalCapabilities}`);
+  console.log(`Average projects per program: ${(totalProjects/programs.length).toFixed(1)}`);
+  console.log(`Average capabilities per project: ${(totalCapabilities/totalProjects).toFixed(1)}`);
+  console.log('\nAll files generated successfully in /data folder!');

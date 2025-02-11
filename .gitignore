@@ -6,9 +6,13 @@ yarn-error.log
 package-lock.json
 yarn.lock
 
-# Excel files (except in data directory)
+# Excel files (except in data directories)
 *.xlsx
 *.xls
+!data/programs/*.xlsx
+!data/programs/*.xls
+!data/teams/*.xlsx
+!data/teams/*.xls
 !data/*.xlsx
 !data/*.xls
 
