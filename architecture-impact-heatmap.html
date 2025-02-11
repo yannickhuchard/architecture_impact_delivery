@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Program Dependency Heatmap</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.2/dist/echarts.min.js"></script>
+    <style>
+        #chartContainer { width: 100%; height: 90vh; margin: 20px 0; }
+        .controls { margin: 20px; padding: 10px; background: #f5f5f5; }
+        .filter-group { margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="filter-group">
+            <label>Project Files:</label>
+            <input type="file" id="xlsxInput" multiple accept=".xlsx">
+        </div>
+        <div class="filter-group">
+            <label>Team Mapping File:</label>
+            <input type="file" id="teamMappingInput" accept=".xlsx">
+        </div>
+        <div class="filter-group">
+            <select id="periodType">
+                <option value="all">All Periods</option>
+                <option value="quarter">By Quarter</option>
+                <option value="month">By Month</option>
+            </select>
+            <select id="periodSelect" disabled>
+                <option value="all">All</option>
+            </select>
+        </div>
+    </div>
+    <div id="chartContainer"></div>
+    <div id="sankeyContainer" style="width: 100%; height: 90vh; margin: 20px 0;"></div>
+    <div id="circlePackingContainer" style="width: 100%; height: 90vh; margin: 20px 0;"></div>
+
+    <script>
+        let allData = [];
+        let teamMappings = [];
+        let myChart = null;
+        let sankeyChart = null;
+        let circlePackingChart = null;
+
+        document.getElementById('xlsxInput').addEventListener('change', handleFile);
+        document.getElementById('teamMappingInput').addEventListener('change', handleTeamMapping);
+        document.getElementById('periodType').addEventListener('change', updatePeriodSelect);
+        document.getElementById('periodSelect').addEventListener('change', updateVisualizations);
+
+        function handleFile(e) {
+            allData = [];
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    workbook.SheetNames.forEach(sheetName => {
+                        const sheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(sheet);
+                        allData = allData.concat(jsonData);
+                    });
+                    updatePeriodSelect();
+                    updateVisualizations();
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function handleTeamMapping(e) {
+            teamMappings = [];
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    teamMappings = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    updateVisualizations();
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        function updateVisualizations() {
+            if (allData.length > 0) {
+                updateChart();
+                updateCirclePacking();
+            }
+            
+            if (allData.length > 0 && teamMappings.length > 0) {
+                updateSankeyDiagram();
+            }
+        }
+
+        function updatePeriodSelect() {
+            const periodType = document.getElementById('periodType').value;
+            const select = document.getElementById('periodSelect');
+            select.disabled = periodType === 'all';
+            
+            const periods = Array.from(new Set(allData.map(d => {
+                const period = d['Delivery Period'];
+                if(periodType === 'quarter') return period.split('-')[0] ? period : `${new Date(period).getFullYear()}-Q${Math.ceil((new Date(period).getMonth()+1)/3)}`;
+                if(periodType === 'month') return period.includes('/') ? period : `${String(new Date(period).getMonth()+1).padStart(2,'0')}/${new Date(period).getFullYear()}`;
+                return 'all';
+            }))).sort();
+
+            select.innerHTML = periodType === 'all' 
+                ? '<option value="all">All</option>' 
+                : '<option value="all">All</option>' + periods.map(p => `<option value="${p}">${p}</option>`).join('');
+        }
+
+        function updateChart() {
+            const filteredData = filterData();
+            const processed = processData(filteredData);
+            if(!myChart) myChart = echarts.init(document.getElementById('chartContainer'));
+            
+            const option = {
+                tooltip: {
+                    formatter: params => `
+                        <strong>${processed.programs[params.data[0]]}</strong><br>
+                        ${processed.capabilities[params.data[1]]}<br>
+                        Dependencies: ${params.data[2]}<br>
+                        Projects: ${processed.detailsMap.get(`${params.data[0]}-${params.data[1]}`).join(', ')}
+                    `
+                },
+                xAxis: { 
+                    type: 'category', 
+                    data: processed.programs,
+                    axisLabel: { 
+                        rotate: 45,
+                        formatter: value => value.length > 20 ? value.substring(0, 20) + '...' : value
+                    }
+                },
+                yAxis: { type: 'category', data: processed.capabilities },
+                visualMap: {
+                    min: 0,
+                    max: Math.max(...processed.matrix.map(m => m[2])),
+                    calculable: true,
+                    inRange: { color: ['#ffffff', '#98fb98', '#f0e68c', '#ffb6c1', '#cd5c5c'] }
+                },
+                series: [{
+                    type: 'heatmap',
+                    data: processed.matrix.map(m => [m[0], m[1], m[2]]),
+                    label: { 
+                        show: true, 
+                        formatter: params => params.data[2] > 0 ? params.data[2] : '' 
+                    }
+                }]
+            };
+            
+            myChart.setOption(option);
+            window.addEventListener('resize', () => myChart.resize());
+        }
+
+        function filterData() {
+            const periodType = document.getElementById('periodType').value;
+            const period = document.getElementById('periodSelect').value;
+            return allData.filter(d => {
+                if(periodType === 'all') return true;
+                const dp = d['Delivery Period'];
+                const currentPeriod = periodType === 'quarter' 
+                    ? dp.includes('Q') ? dp : `${new Date(dp).getFullYear()}-Q${Math.ceil((new Date(dp).getMonth()+1)/3)}`
+                    : dp.includes('/') ? dp : `${String(new Date(dp).getMonth()+1).padStart(2,'0')}/${new Date(dp).getFullYear()}`;
+                return currentPeriod === period;
+            });
+        }
+
+        function processData(data) {
+            const programs = [...new Set(data.map(d => d['Program Name']))];
+            const capabilities = [...new Set(data.map(d => `${d['Capability Domain']}: ${d['Capability Name']}`))];
+            const matrix = [];
+            const detailsMap = new Map();
+
+            programs.forEach((program, pIdx) => {
+                capabilities.forEach((capability, cIdx) => {
+                    const entries = data.filter(d => 
+                        d['Program Name'] === program && 
+                        `${d['Capability Domain']}: ${d['Capability Name']}` === capability
+                    );
+                    if(entries.length) {
+                        matrix.push([pIdx, cIdx, entries.length, entries.map(e => e['Project Name'])]);
+                        detailsMap.set(`${pIdx}-${cIdx}`, entries.map(e => e['Project Name']));
+                    }
+                });
+            });
+
+            return { programs, capabilities, matrix, detailsMap };
+        }
+
+        function updateSankeyDiagram() {
+            const filteredData = filterData();
+            if (!sankeyChart) sankeyChart = echarts.init(document.getElementById('sankeyContainer'));
+
+            // Prepare nodes and links for Sankey diagram
+            const nodes = [];
+            const links = [];
+            const nodeMap = new Map();
+
+            // Helper function to add node and get its index
+            function addNode(name, category) {
+                const key = `${category}:${name}`;
+                if (!nodeMap.has(key)) {
+                    nodeMap.set(key, nodes.length);
+                    nodes.push({ name: name, category: category });
+                }
+                return nodeMap.get(key);
+            }
+
+            // Add program nodes and project links
+            filteredData.forEach(project => {
+                const programIdx = addNode(project['Program Name'], 'program');
+                const projectIdx = addNode(project['Project Name'], 'project');
+                const capabilityIdx = addNode(
+                    `${project['Capability Domain']}: ${project['Capability Name']}`,
+                    'capability'
+                );
+
+                // Program to Project link
+                links.push({
+                    source: programIdx,
+                    target: projectIdx,
+                    value: 1
+                });
+
+                // Project to Capability link
+                links.push({
+                    source: projectIdx,
+                    target: capabilityIdx,
+                    value: 1
+                });
+
+                // Find team for this capability and add link
+                const teamMapping = teamMappings.find(tm => 
+                    tm['Capability Domain'] === project['Capability Domain'] &&
+                    tm['Capability Name'] === project['Capability Name']
+                );
+
+                if (teamMapping) {
+                    const teamIdx = addNode(teamMapping['Team Name'], 'team');
+                    links.push({
+                        source: capabilityIdx,
+                        target: teamIdx,
+                        value: 1
+                    });
+                }
+            });
+
+            const option = {
+                title: {
+                    text: 'Program to Team Dependencies',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'item',
+                    triggerOn: 'mousemove'
+                },
+                series: [{
+                    type: 'sankey',
+                    data: nodes,
+                    links: links,
+                    emphasis: {
+                        focus: 'adjacency'
+                    },
+                    levels: [
+                        { depth: 0, itemStyle: { color: '#e31a1c' } },  // Programs
+                        { depth: 1, itemStyle: { color: '#33a02c' } },  // Projects
+                        { depth: 2, itemStyle: { color: '#1f78b4' } },  // Capabilities
+                        { depth: 3, itemStyle: { color: '#6a3d9a' } }   // Teams
+                    ],
+                    lineStyle: {
+                        color: 'gradient',
+                        curveness: 0.5
+                    },
+                    label: {
+                        position: 'right'
+                    }
+                }]
+            };
+
+            sankeyChart.setOption(option);
+            window.addEventListener('resize', () => sankeyChart.resize());
+        }
+
+        function updateCirclePacking() {
+            const filteredData = filterData();
+            if (!circlePackingChart) {
+                circlePackingChart = echarts.init(document.getElementById('circlePackingContainer'));
+            }
+
+            // Prepare hierarchical data
+            const hierarchyData = {
+                name: 'root',
+                children: []
+            };
+
+            // Group by programs
+            const programGroups = new Map();
+            filteredData.forEach(item => {
+                if (!programGroups.has(item['Program Name'])) {
+                    programGroups.set(item['Program Name'], new Map());
+                }
+                const projectMap = programGroups.get(item['Program Name']);
+                
+                if (!projectMap.has(item['Project Name'])) {
+                    projectMap.set(item['Project Name'], new Set());
+                }
+                projectMap.get(item['Project Name']).add(
+                    `${item['Capability Domain']}: ${item['Capability Name']}`
+                );
+            });
+
+            // Build hierarchy
+            programGroups.forEach((projectMap, programName) => {
+                const programNode = {
+                    name: programName,
+                    value: 1,
+                    children: []
+                };
+
+                projectMap.forEach((capabilities, projectName) => {
+                    const projectNode = {
+                        name: projectName,
+                        value: 1,
+                        children: Array.from(capabilities).map(cap => ({
+                            name: cap,
+                            value: 1
+                        }))
+                    };
+                    programNode.children.push(projectNode);
+                });
+
+                hierarchyData.children.push(programNode);
+            });
+
+            const option = {
+                title: {
+                    text: 'Program Hierarchy',
+                    left: 'center'
+                },
+                tooltip: {
+                    formatter: (params) => {
+                        const data = params.data;
+                        const value = data.value;
+                        if (data.children) {
+                            const childCount = data.children.length;
+                            return `${data.name}<br/>Contains: ${childCount} ${
+                                data.children[0].children ? 'Projects' : 'Capabilities'
+                            }`;
+                        }
+                        return data.name;
+                    }
+                },
+                series: {
+                    type: 'treemap',
+                    layoutAlgorithm: 'squarified',
+                    nodeClick: false,
+                    roam: false,
+                    width: '100%',
+                    height: '100%',
+                    data: [hierarchyData],
+                    levels: [
+                        {
+                            itemStyle: {
+                                borderColor: '#555',
+                                borderWidth: 4,
+                                gapWidth: 4
+                            }
+                        },
+                        {
+                            itemStyle: {
+                                borderColor: '#333',
+                                borderWidth: 3,
+                                gapWidth: 3
+                            }
+                        },
+                        {
+                            itemStyle: {
+                                borderColor: '#222',
+                                borderWidth: 2,
+                                gapWidth: 2
+                            }
+                        }
+                    ],
+                    label: {
+                        show: true
+                    },
+                    upperLabel: {
+                        show: true,
+                        height: 30
+                    }
+                }
+            };
+
+            circlePackingChart.setOption(option);
+            window.addEventListener('resize', () => circlePackingChart.resize());
+        }
+    </script>
+</body>
+</html>
