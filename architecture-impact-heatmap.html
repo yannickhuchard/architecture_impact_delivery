@@ -69,6 +69,7 @@
             <button class="tab-button" data-tab="hierarchy">Program Hierarchy</button>
             <button class="tab-button" data-tab="budget">Estimated Budgets Overview</button>
             <button class="tab-button" data-tab="dependencies">Program Dependencies</button>
+            <button class="tab-button" data-tab="network">Program-Capability Network</button>
         </div>
         <div id="heatmapTab" class="tab-content active">
             <div id="chartContainer" style="width: 100%; height: 100%;"></div>
@@ -85,6 +86,36 @@
         <div id="dependenciesTab" class="tab-content">
             <div id="dependenciesContainer" style="width: 100%; height: 100%;"></div>
         </div>
+        <div id="networkTab" class="tab-content">
+            <div style="padding: 10px; background: #f5f5f5; margin: 10px;">
+                <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 10px;">
+                    <div>
+                        <label for="programSelect">Program: </label>
+                        <select id="programSelect">
+                            <option value="">All Programs</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="projectSelect">Project: </label>
+                        <select id="projectSelect">
+                            <option value="">All Projects</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="capabilitySelect">Capability: </label>
+                        <select id="capabilitySelect">
+                            <option value="">All Capabilities</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="repulsionForce">Repulsion Force: </label>
+                    <input type="range" id="repulsionForce" min="400" max="2000" value="800" style="width: 200px;">
+                    <span id="repulsionValue">800</span>
+                </div>
+            </div>
+            <div id="networkContainer" style="width: 100%; height: calc(100% - 50px);"></div>
+        </div>
     </div>
 
     <script>
@@ -94,6 +125,7 @@
         let sankeyChart = null;
         let circlePackingChart = null;
         let dependenciesChart = null;
+        let networkChart = null;
 
         document.getElementById('xlsxInput').addEventListener('change', handleFile);
         document.getElementById('teamMappingInput').addEventListener('change', handleTeamMapping);
@@ -130,6 +162,8 @@
                         });
                     } else if (button.dataset.tab === 'dependencies' && dependenciesChart) {
                         dependenciesChart.resize();
+                    } else if (button.dataset.tab === 'network' && networkChart) {
+                        networkChart.resize();
                     }
                 }, 50);
             });
@@ -176,11 +210,14 @@
                 updateCirclePacking();
                 updateBudgetCharts();
                 updateProgramDependencies();
+                updateProgramCapabilityNetwork();
                 document.querySelector('[data-tab="budget"]').style.display = 'block';
                 document.querySelector('[data-tab="dependencies"]').style.display = 'block';
+                document.querySelector('[data-tab="network"]').style.display = 'block';
             } else {
                 document.querySelector('[data-tab="budget"]').style.display = 'none';
                 document.querySelector('[data-tab="dependencies"]').style.display = 'none';
+                document.querySelector('[data-tab="network"]').style.display = 'none';
             }
             
             if (allData.length > 0 && teamMappings.length > 0) {
@@ -219,7 +256,8 @@
                         <strong>${processed.programs[params.data[0]]}</strong><br>
                         ${processed.capabilities[params.data[1]]}<br>
                         Dependencies: ${params.data[2]}<br>
-                        Projects: ${processed.detailsMap.get(`${params.data[0]}-${params.data[1]}`).join(', ')}
+                        Projects:<br/>${processed.detailsMap.get(`${params.data[0]}-${params.data[1]}`).map(p => `• ${p}`).join('<br/>')}<br/>
+                        Program: ${processed.programs[params.data[0]]}
                     `
                 },
                 xAxis: { 
@@ -766,6 +804,282 @@
 
             dependenciesChart.setOption(option);
             window.addEventListener('resize', () => dependenciesChart.resize());
+        }
+
+        function updateProgramCapabilityNetwork() {
+            if (!networkChart) {
+                networkChart = echarts.init(document.getElementById('networkContainer'));
+            }
+
+            // Vivid colors for programs
+            const programColors = {
+                'Regulatory Program': '#FF0000',      // Vivid Red
+                'Digital Program': '#00FF00',         // Vivid Green
+                'IT Core Program': '#0066FF',         // Vivid Blue
+                'Innovation Program': '#FF00FF',      // Vivid Magenta
+                'Credit Program': '#FFD700',          // Gold
+                'Market Mandatory Program': '#FF6600', // Vivid Orange
+                'KYC-KYT Program': '#9933FF',         // Vivid Purple
+                'Data Program': '#00FFFF'             // Cyan
+            };
+
+            // Prepare nodes and links
+            const nodes = [];
+            const links = [];
+            const nodeMap = new Map();
+
+            // First pass: collect all unique elements and their counts
+            const programProjects = new Map();
+            const projectCapabilities = new Map();
+            const capabilityRelations = new Map();
+
+            allData.forEach(item => {
+                // Program-Project relationship
+                if (!programProjects.has(item['Program Name'])) {
+                    programProjects.set(item['Program Name'], new Set());
+                }
+                programProjects.get(item['Program Name']).add(item['Project Name']);
+
+                // Project-Capability relationship
+                if (!projectCapabilities.has(item['Project Name'])) {
+                    projectCapabilities.set(item['Project Name'], new Set());
+                }
+                const capKey = `${item['Capability Domain']}: ${item['Capability Name']}`;
+                projectCapabilities.get(item['Project Name']).add(capKey);
+
+                // Capability relations count
+                capabilityRelations.set(capKey, (capabilityRelations.get(capKey) || 0) + 1);
+            });
+
+            // Add program nodes
+            programProjects.forEach((projects, program) => {
+                nodes.push({
+                    name: program,
+                    value: projects.size,
+                    category: 'Program',
+                    symbolSize: Math.max(50, Math.min(100, projects.size * 6)),
+                    itemStyle: {
+                        color: programColors[program]
+                    },
+                    label: {
+                        show: true,
+                        formatter: (params) => `${params.name}\n(${params.value} projects)`,
+                        fontSize: 14,
+                        fontWeight: 'bold'
+                    }
+                });
+                nodeMap.set(program, nodes.length - 1);
+            });
+
+            // Add project nodes
+            projectCapabilities.forEach((capabilities, project) => {
+                const program = allData.find(item => item['Project Name'] === project)['Program Name'];
+                nodes.push({
+                    name: project,
+                    value: capabilities.size,
+                    category: 'Project',
+                    symbolSize: Math.max(30, Math.min(70, capabilities.size * 4)),
+                    itemStyle: {
+                        color: programColors[program]  // Inherit program color
+                    },
+                    label: {
+                        show: true,
+                        formatter: (params) => `${params.name}\n(${params.value} capabilities)`,
+                        fontSize: 12
+                    }
+                });
+                nodeMap.set(project, nodes.length - 1);
+
+                // Create Program-Project link
+                links.push({
+                    source: nodeMap.get(program),
+                    target: nodeMap.get(project),
+                    value: 1,
+                    lineStyle: {
+                        color: programColors[program]
+                    }
+                });
+            });
+
+            // Add capability nodes and create Project-Capability links
+            const processedLinks = new Set();
+            allData.forEach(item => {
+                const capKey = `${item['Capability Domain']}: ${item['Capability Name']}`;
+                if (!nodeMap.has(capKey)) {
+                    const relationCount = capabilityRelations.get(capKey);
+                    nodes.push({
+                        name: capKey,
+                        value: relationCount,
+                        category: 'Capability',
+                        symbolSize: Math.max(20, Math.min(60, relationCount * 3)),
+                        itemStyle: {
+                            color: '#A0A0A0'  // Gray for capabilities
+                        },
+                        label: {
+                            show: true,
+                            formatter: (params) => `${params.name}\n(${params.value} relations)`,
+                            fontSize: 12
+                        }
+                    });
+                    nodeMap.set(capKey, nodes.length - 1);
+                }
+
+                // Create Project-Capability link
+                const linkKey = `${item['Project Name']}-${capKey}`;
+                if (!processedLinks.has(linkKey)) {
+                    const program = item['Program Name'];
+                    links.push({
+                        source: nodeMap.get(item['Project Name']),
+                        target: nodeMap.get(capKey),
+                        value: 1,
+                        lineStyle: {
+                            color: programColors[program],
+                            opacity: 0.6
+                        }
+                    });
+                    processedLinks.add(linkKey);
+                }
+            });
+
+            // Populate selectors
+            const programSelect = document.getElementById('programSelect');
+            const projectSelect = document.getElementById('projectSelect');
+            const capabilitySelect = document.getElementById('capabilitySelect');
+
+            // Clear and populate program selector
+            programSelect.innerHTML = '<option value="">All Programs</option>' +
+                Array.from(programProjects.keys())
+                    .map(prog => `<option value="${prog}">${prog}</option>`)
+                    .join('');
+
+            // Clear and populate project selector
+            projectSelect.innerHTML = '<option value="">All Projects</option>' +
+                Array.from(projectCapabilities.keys())
+                    .map(proj => `<option value="${proj}">${proj}</option>`)
+                    .join('');
+
+            // Clear and populate capability selector
+            capabilitySelect.innerHTML = '<option value="">All Capabilities</option>' +
+                Array.from(capabilityRelations.keys())
+                    .map(cap => `<option value="${cap}">${cap}</option>`)
+                    .join('');
+
+            function updateChart(repulsionValue) {
+                const selectedProgram = programSelect.value;
+                const selectedProject = projectSelect.value;
+                const selectedCapability = capabilitySelect.value;
+
+                // Calculate highlighted nodes and links
+                const highlightedNodes = new Set();
+                const highlightedLinks = new Set();
+
+                if (selectedProgram || selectedProject || selectedCapability) {
+                    nodes.forEach((node, idx) => {
+                        if ((selectedProgram && node.name === selectedProgram) ||
+                            (selectedProject && node.name === selectedProject) ||
+                            (selectedCapability && node.name === selectedCapability)) {
+                            highlightedNodes.add(idx);
+                            // Add connected nodes
+                            links.forEach((link, linkIdx) => {
+                                if (link.source === idx) {
+                                    highlightedNodes.add(link.target);
+                                    highlightedLinks.add(linkIdx);
+                                } else if (link.target === idx) {
+                                    highlightedNodes.add(link.source);
+                                    highlightedLinks.add(linkIdx);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                const option = {
+                    title: {
+                        text: 'Program-Project-Capability Network',
+                        left: 'center',
+                        top: 20
+                    },
+                    tooltip: {
+                        formatter: (params) => {
+                            if (params.dataType === 'node') {
+                                const category = params.data.category;
+                                if (category === 'Program') {
+                                    return `${params.name}<br/>${params.value} projects`;
+                                } else if (category === 'Project') {
+                                    return `${params.name}<br/>${params.value} capabilities`;
+                                } else {
+                                    return `${params.name}<br/>${params.value} relations`;
+                                }
+                            }
+                            return `${params.data.source} → ${params.data.target}`;
+                        }
+                    },
+                    legend: {
+                        data: ['Program', 'Project', 'Capability'],
+                        orient: 'vertical',
+                        right: 20,
+                        top: 'middle'
+                    },
+                    series: [{
+                        type: 'graph',
+                        layout: 'force',
+                        data: nodes.map((node, idx) => ({
+                            ...node,
+                            itemStyle: {
+                                ...node.itemStyle,
+                                opacity: highlightedNodes.size === 0 || highlightedNodes.has(idx) ? 1 : 0.1
+                            },
+                            label: {
+                                ...node.label,
+                                show: highlightedNodes.size === 0 || highlightedNodes.has(idx)
+                            }
+                        })),
+                        links: links.map((link, idx) => ({
+                            ...link,
+                            lineStyle: {
+                                ...link.lineStyle,
+                                opacity: highlightedLinks.size === 0 || highlightedLinks.has(idx) ? 0.6 : 0.1
+                            }
+                        })),
+                        categories: [
+                            { name: 'Program' },
+                            { name: 'Project' },
+                            { name: 'Capability' }
+                        ],
+                        roam: true,
+                        draggable: true,
+                        force: {
+                            repulsion: repulsionValue,
+                            edgeLength: 300,
+                            gravity: 0.1
+                        },
+                        emphasis: {
+                            focus: 'adjacency',
+                            lineStyle: {
+                                width: 4
+                            }
+                        }
+                    }]
+                };
+
+                networkChart.setOption(option);
+            }
+
+            // Add event listeners for selectors
+            programSelect.addEventListener('change', () => updateChart(parseInt(document.getElementById('repulsionForce').value)));
+            projectSelect.addEventListener('change', () => updateChart(parseInt(document.getElementById('repulsionForce').value)));
+            capabilitySelect.addEventListener('change', () => updateChart(parseInt(document.getElementById('repulsionForce').value)));
+
+            // Initial chart update
+            updateChart(800);
+
+            document.getElementById('repulsionForce').addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                document.getElementById('repulsionValue').textContent = value;
+                updateChart(value);
+            });
+
+            window.addEventListener('resize', () => networkChart.resize());
         }
     </script>
 </body>
