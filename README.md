@@ -22,7 +22,7 @@ This toolkit helps enterprise architects and program managers:
    - Assigns capabilities to teams based on business and IT domains
    - Creates a consolidated Excel file of all mappings
 
-3. **Impact Visualizer** (`architecture-impact-heatmap.html`)
+3. **Impact Visualizer** (`architecture-impact-delivery.html`)
    - Interactive heatmap showing program/project impact on capabilities
    - Sankey diagram displaying program > project > capability > team flow
    - Time-based filtering options
@@ -63,7 +63,7 @@ This creates `teams-to-capabilities.xlsx` in the `data` folder.
 
 ### Visualization Usage
 
-1. Open `architecture-impact-heatmap.html` in a web browser
+1. Open `architecture-impact-delivery` in a web browser
 2. Load data files:
    - Click "Project Files" to load program Excel files
    - Click "Team Mapping File" to load teams-to-capabilities.xlsx
@@ -125,7 +125,7 @@ This creates `teams-to-capabilities.xlsx` in the `data` folder.
 ### Project Structure
 ```
 ├── data/                           # Generated Excel files
-├── architecture-impact-heatmap.html # Visualization interface
+├── architecture-impact-delivery.html # Visualization interface
 ├── generate-program.js             # Program data generator
 ├── generate-team-to-capabilities.js # Team mapping generator
 └── .gitignore                      # Git ignore rules
