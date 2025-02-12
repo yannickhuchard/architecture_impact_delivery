@@ -5,8 +5,61 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.2/dist/echarts.min.js"></script>
     <style>
-        .controls { margin: 20px; padding: 10px; background: #f5f5f5; }
-        .filter-group { margin: 10px 0; }
+        .controls {
+            margin: 20px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+            position: relative;
+        }
+
+        .filter-group label {
+            min-width: 150px;
+            font-weight: bold;
+            color: #444;
+        }
+
+        .filter-group input[type="file"],
+        .filter-group select {
+            flex: 1;
+            padding: 8px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-width: 200px;
+        }
+
+        .period-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .period-selects {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .period-selects select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            flex: 1;
+        }
         
         /* Tab Styles */
         .tab-container {
@@ -34,23 +87,387 @@
             display: none;
             width: 100%;
             height: 90vh;
+            overflow: auto;
         }
         .tab-content.active {
             display: block;
         }
+
+        .menu-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .menu {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: none;
+            z-index: 1000;
+        }
+
+        .menu.active {
+            display: block;
+        }
+
+        .menu-item {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+
+        .menu-item:hover {
+            background: #f5f5f5;
+        }
+
+        .dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            z-index: 1001;
+        }
+
+        .dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            z-index: 1002;
+        }
+
+        .dialog h2 {
+            margin-top: 0;
+            color: #007bff;
+        }
+
+        .dialog-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .file-format {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .metrics-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+            margin: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .metric-card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .metric-title {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .top-projects {
+            grid-column: 1 / -1;
+        }
+
+        .top-projects-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 0 20px;
+        }
+
+        .project-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+
+        .project-item:hover {
+            transform: translateX(5px);
+            background: #f0f0f0;
+        }
+
+        .project-rank {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: bold;
+        }
+
+        .project-rank.gold {
+            color: #FFD700;
+        }
+
+        .project-rank.silver {
+            color: #C0C0C0;
+        }
+
+        .project-rank.bronze {
+            color: #CD7F32;
+        }
+
+        .medal {
+            font-size: 20px;
+        }
+
+        .project-capabilities {
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .rankings-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            padding: 20px;
+            height: 100%;
+            overflow-y: auto;
+        }
+
+        .ranking-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .ranking-section h3 {
+            color: #007bff;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        body {
+            font-family: Verdana, Geneva, sans-serif;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+        }
+
+        .zoom-button {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+
+        .zoom-button:hover {
+            background: #f0f0f0;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+        }
+
+        .zoom-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .app-title {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            margin-bottom: 20px;
+        }
+
+        .app-title h1 {
+            margin: 0;
+            color: #007bff;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .coach-mark {
+            position: absolute;
+            background: #007bff;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 1000;
+            animation: pulse 2s infinite;
+            display: none;
+            right: -280px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .coach-mark::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: -10px;
+            transform: translateY(-50%);
+            border-width: 10px 10px 10px 0;
+            border-style: solid;
+            border-color: transparent #007bff transparent transparent;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .view-toggle {
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+        }
+
+        input:checked + .slider {
+            background-color: #007bff;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .slider.round {
+            border-radius: 34px;
+        }
+
+        .slider.round:before {
+            border-radius: 50%;
+        }
+
+        .toggle-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        #heatmapTab {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #chartContainer {
+            width: 100%;
+            min-height: 800px;
+            height: calc(90vh - 40px);
+            margin-bottom: 40px;
+        }
     </style>
 </head>
 <body>
+    <div class="app-title">
+        <h1>Enterprise Architecture - Capabilities Delivery Flow</h1>
+    </div>
     <div class="controls">
         <div class="filter-group">
             <label>Project Files:</label>
             <input type="file" id="xlsxInput" multiple accept=".xlsx">
+            <div id="programCoach" class="coach-mark">
+                1: Load all your program files
+            </div>
         </div>
         <div class="filter-group">
             <label>Team Mapping File:</label>
             <input type="file" id="teamMappingInput" accept=".xlsx">
+            <div id="teamCoach" class="coach-mark">
+                2: Load the Team-Capabilities mapping file
+            </div>
         </div>
-        <div class="filter-group">
+        <div class="filter-group period-controls">
+            <label>Period:</label>
+            <div class="period-selects">
             <select id="periodType">
                 <option value="all">All Periods</option>
                 <option value="quarter">By Quarter</option>
@@ -59,6 +476,38 @@
             <select id="periodSelect" disabled>
                 <option value="all">All</option>
             </select>
+        </div>
+    </div>
+    </div>
+
+    <div class="metrics-dashboard">
+        <div class="metric-card">
+            <div class="metric-title">Programs</div>
+            <div class="metric-value" id="programCount">-</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Projects</div>
+            <div class="metric-value" id="projectCount">-</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Capabilities</div>
+            <div class="metric-value" id="capabilityCount">-</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Teams</div>
+            <div class="metric-value" id="teamCount">-</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Avg Projects/Program</div>
+            <div class="metric-value" id="avgProjectsPerProgram">-</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Avg Capabilities/Program</div>
+            <div class="metric-value" id="avgCapabilitiesPerProgram">-</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Avg Teams/Program</div>
+            <div class="metric-value" id="avgTeamsPerProgram">-</div>
         </div>
     </div>
 
@@ -70,12 +519,25 @@
             <button class="tab-button" data-tab="budget">Estimated Budgets Overview</button>
             <button class="tab-button" data-tab="dependencies">Program Dependencies</button>
             <button class="tab-button" data-tab="network">Program-Capability Network</button>
+            <button class="tab-button" data-tab="rankings">Top 10 Rankings</button>
+            <button class="tab-button" data-tab="gantt">Delivery Timeline</button>
         </div>
         <div id="heatmapTab" class="tab-content active">
-            <div id="chartContainer" style="width: 100%; height: 100%;"></div>
+            <div class="view-toggle">
+                <label class="switch">
+                    <input type="checkbox" id="viewToggle">
+                    <span class="slider round"></span>
+                </label>
+                <span class="toggle-label">Show Projects View</span>
+            </div>
+            <div id="chartContainer" style="width: 100%; height: calc(100% - 40px);"></div>
         </div>
         <div id="sankeyTab" class="tab-content">
-            <div id="sankeyContainer" style="width: 100%; height: 100%;"></div>
+            <div class="zoom-controls" style="top: 80px;">
+                <button class="zoom-button" onclick="zoomSankey(1.2)">🔍+</button>
+                <button class="zoom-button" onclick="zoomSankey(0.8)">🔍-</button>
+            </div>
+            <div id="sankeyContainer" style="width: 100%; height: calc(100vh - 200px); margin-top: 20px;"></div>
         </div>
         <div id="hierarchyTab" class="tab-content">
             <div id="circlePackingContainer" style="width: 100%; height: 100%;"></div>
@@ -116,6 +578,122 @@
             </div>
             <div id="networkContainer" style="width: 100%; height: calc(100% - 50px);"></div>
         </div>
+        <div id="rankingsTab" class="tab-content">
+            <div class="rankings-container">
+                <div class="ranking-section">
+                    <h3>Top 10 Projects by Capabilities</h3>
+                    <div class="top-projects-list" id="topProjectsByCapabilities"></div>
+                </div>
+                <div class="ranking-section">
+                    <h3>Top 10 Projects by Budget</h3>
+                    <div class="top-projects-list" id="topProjectsByBudget"></div>
+                </div>
+            </div>
+        </div>
+        <div id="ganttTab" class="tab-content">
+            <div id="ganttContainer" style="width: 100%; height: calc(100vh - 200px);"></div>
+        </div>
+    </div>
+
+    <button class="menu-button">☰ Menu</button>
+    <div class="menu">
+        <div class="menu-item" onclick="showHowTo()">How to Use</div>
+        <div class="menu-item" onclick="showAbout()">About</div>
+    </div>
+
+    <div class="dialog-overlay">
+        <div class="dialog">
+            <button class="dialog-close" onclick="hideDialog()">×</button>
+            <h2>How to Use This Tool</h2>
+            
+            <h3>Overview</h3>
+            <p>This application is designed for Enterprise Architects and Portfolio Managers to assess the impact of programs and projects across the enterprise portfolio. It provides both quick assessments and detailed architectural insights through various visualizations.</p>
+
+            <h3>Getting Started</h3>
+            <ol>
+                <li><strong>Load Project Files:</strong>
+                    <ul>
+                        <li>Click "Choose Files" under "Project Files"</li>
+                        <li>Select one or multiple Excel files containing program/project data</li>
+                    </ul>
+                </li>
+                <li><strong>Load Team Mapping (Optional):</strong>
+                    <ul>
+                        <li>Click "Choose File" under "Team Mapping File"</li>
+                        <li>Select the Excel file containing team-to-capability mappings</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h3>Available Views</h3>
+            <ul>
+                <li><strong>Capability Heatmap:</strong> Shows capability impact density across programs</li>
+                <li><strong>Dependency Flow:</strong> Visualizes team and capability relationships (requires team mapping)</li>
+                <li><strong>Program Hierarchy:</strong> Displays program structure and relationships</li>
+                <li><strong>Estimated Budgets:</strong> Shows budget distribution across programs and projects</li>
+                <li><strong>Program Dependencies:</strong> Highlights shared capabilities between programs</li>
+                <li><strong>Program-Capability Network:</strong> Interactive network view of all relationships</li>
+            </ul>
+
+            <h3>Sample Files</h3>
+            <p>You can generate sample files using our generators:</p>
+            <ul>
+                <li><code>node generate-program.js</code> - Generates program/project files</li>
+                <li><code>node generate-team-to-capabilities.js</code> - Generates team mapping file</li>
+            </ul>
+
+            <h3>File Formats</h3>
+            <div class="file-format">
+                <strong>Program/Project Files (Excel):</strong>
+                <ul>
+                    <li>Program Name</li>
+                    <li>Project Name</li>
+                    <li>Phase (Initiation/Intake)</li>
+                    <li>Capability Domain (Business/IT)</li>
+                    <li>Capability Name</li>
+                    <li>Action (Create/Update/Delete)</li>
+                    <li>Delivery Period (YYYY-QN)</li>
+                    <li>Architect</li>
+                    <li>Total Cost Estimation (€)</li>
+                </ul>
+            </div>
+            <div class="file-format">
+                <strong>Team Mapping File (Excel):</strong>
+                <ul>
+                    <li>Team Name</li>
+                    <li>Capability Domain (Business/IT)</li>
+                    <li>Capability Name</li>
+                </ul>
+            </div>
+
+            <h3>Project Phases and Progress</h3>
+            <p>The Delivery Timeline tab shows project progress based on their current phase:</p>
+            <ul>
+                <li>Ideation: 10% completion</li>
+                <li>Intake: 20% completion</li>
+                <li>Initiation: 30% completion</li>
+                <li>Implementation: 50% completion</li>
+                <li>User Acceptance: 80% completion</li>
+                <li>Production: 100% completion</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="dialog-overlay" id="aboutDialog">
+        <div class="dialog">
+            <button class="dialog-close" onclick="hideAbout()">×</button>
+            <h2>About</h2>
+            <div style="text-align: center; margin: 20px 0;">
+                <h3 style="margin-bottom: 5px;">Enterprise Architecture - Capabilities Delivery Flow</h3>
+                <p style="color: #666; margin-bottom: 20px;">Version 0.1.0</p>
+                <p>Created by</p>
+                <h3 style="margin: 5px 0;">
+                    <a href="https://yannickhuchard.com" target="_blank" style="color: #007bff; text-decoration: none;">
+                        Yannick HUCHARD
+                    </a>
+                </h3>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -126,13 +704,15 @@
         let circlePackingChart = null;
         let dependenciesChart = null;
         let networkChart = null;
+        let sankeyZoomLevel = 1;
+        let coachMarkTimeout = null;
 
         document.getElementById('xlsxInput').addEventListener('change', handleFile);
         document.getElementById('teamMappingInput').addEventListener('change', handleTeamMapping);
         document.getElementById('periodType').addEventListener('change', updatePeriodSelect);
         document.getElementById('periodSelect').addEventListener('change', updateVisualizations);
 
-        // Update the tab switching functionality
+        // Update the tab switching event listeners
         document.querySelectorAll('.tab-button').forEach(button => {
             button.addEventListener('click', () => {
                 // Update button states
@@ -140,10 +720,13 @@
                 button.classList.add('active');
                 
                 // Update tab content visibility
-                document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-                document.getElementById(`${button.dataset.tab}Tab`).classList.add('active');
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.style.display = 'none';  // Change from removing 'active' class
+                });
+                const targetTab = document.getElementById(`${button.dataset.tab}Tab`);
+                targetTab.style.display = 'block';  // Change from adding 'active' class
                 
-                // Trigger resize for the visible chart with a slight delay
+                // Trigger resize for the visible chart
                 setTimeout(() => {
                     if (button.dataset.tab === 'heatmap' && myChart) {
                         myChart.resize();
@@ -152,26 +735,35 @@
                     } else if (button.dataset.tab === 'hierarchy' && circlePackingChart) {
                         circlePackingChart.resize();
                     } else if (button.dataset.tab === 'budget') {
-                        // Resize all budget charts
                         const budgetCharts = document.querySelectorAll('#budgetContainer > div');
                         budgetCharts.forEach(div => {
                             const chart = echarts.getInstanceByDom(div);
-                            if (chart) {
-                                chart.resize();
-                            }
+                            if (chart) chart.resize();
                         });
                     } else if (button.dataset.tab === 'dependencies' && dependenciesChart) {
                         dependenciesChart.resize();
                     } else if (button.dataset.tab === 'network' && networkChart) {
                         networkChart.resize();
+                    } else if (button.dataset.tab === 'gantt' && ganttChart) {
+                        ganttChart.resize();
                     }
                 }, 50);
             });
         });
 
+        // Update initial tab visibility
+        document.getElementById('heatmapTab').style.display = 'block';
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            if (tab.id !== 'heatmapTab') {
+                tab.style.display = 'none';
+            }
+        });
+
         function handleFile(e) {
             allData = [];
             const files = Array.from(e.target.files);
+            let filesProcessed = 0;
+            
             files.forEach(file => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -182,8 +774,15 @@
                         const jsonData = XLSX.utils.sheet_to_json(sheet);
                         allData = allData.concat(jsonData);
                     });
-                    updatePeriodSelect();
-                    updateVisualizations();
+                    
+                    filesProcessed++;
+                    if (filesProcessed === files.length) {
+                        updatePeriodSelect();
+                        updateVisualizations();
+                        updateMetrics();
+                        updateGanttChart();
+                        updateCoachMarks();
+                    }
                 };
                 reader.readAsArrayBuffer(file);
             });
@@ -199,6 +798,8 @@
                     const workbook = XLSX.read(data, {type: 'array'});
                     teamMappings = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                     updateVisualizations();
+                    updateMetrics();
+                    updateCoachMarks();
                 };
                 reader.readAsArrayBuffer(file);
             }
@@ -250,25 +851,63 @@
             const processed = processData(filteredData);
             if(!myChart) myChart = echarts.init(document.getElementById('chartContainer'));
             
+            const showProjects = document.getElementById('viewToggle').checked;
+            
             const option = {
                 tooltip: {
-                    formatter: params => `
+                    formatter: params => {
+                        if (showProjects) {
+                            const project = processed.programs[params.data[0]];
+                            const details = processed.detailsMap.get(`${params.data[0]}-${params.data[1]}`);
+                            return `
+                                <strong>${details[0]}</strong><br>
+                                ${details[1]}<br>
+                                ${processed.capabilities[params.data[1]]}<br>
+                                Dependencies: ${params.data[2]}
+                            `;
+                        } else {
+                            return `
                         <strong>${processed.programs[params.data[0]]}</strong><br>
                         ${processed.capabilities[params.data[1]]}<br>
                         Dependencies: ${params.data[2]}<br>
-                        Projects:<br/>${processed.detailsMap.get(`${params.data[0]}-${params.data[1]}`).map(p => `• ${p}`).join('<br/>')}<br/>
-                        Program: ${processed.programs[params.data[0]]}
-                    `
+                                Projects:<br/>${processed.detailsMap.get(`${params.data[0]}-${params.data[1]}`).map(p => `• ${p}`).join('<br/>')}<br/>
+                                Program: ${processed.programs[params.data[0]]}
+                            `;
+                        }
+                    }
+                },
+                grid: {
+                    top: 50,
+                    right: 100,
+                    bottom: 150,
+                    left: 200
                 },
                 xAxis: { 
                     type: 'category', 
                     data: processed.programs,
                     axisLabel: { 
                         rotate: 45,
-                        formatter: value => value.length > 20 ? value.substring(0, 20) + '...' : value
+                        interval: 0,
+                        formatter: value => {
+                            if (showProjects) {
+                                return value.length > 30 ? value.substring(0, 30) + '...' : value;
+                            }
+                            return value.length > 20 ? value.substring(0, 20) + '...' : value;
+                        },
+                        overflow: 'break',
+                        lineHeight: 20
                     }
                 },
-                yAxis: { type: 'category', data: processed.capabilities },
+                yAxis: { 
+                    type: 'category',
+                    data: processed.capabilities,
+                    axisLabel: {
+                        interval: 0,
+                        formatter: value => {
+                            return value.length > 40 ? value.substring(0, 40) + '...' : value;
+                        }
+                    }
+                },
                 visualMap: {
                     min: 0,
                     max: Math.max(...processed.matrix.map(m => m[2])),
@@ -286,7 +925,7 @@
             };
             
             myChart.setOption(option);
-            window.addEventListener('resize', () => myChart.resize());
+            myChart.resize();
         }
 
         function filterData() {
@@ -303,6 +942,46 @@
         }
 
         function processData(data) {
+            const showProjects = document.getElementById('viewToggle').checked;
+            
+            if (showProjects) {
+                const projects = [...new Set(data.map(d => d['Project Name']))];
+                const capabilities = [...new Set(data.map(d => `${d['Capability Domain']}: ${d['Capability Name']}`))];
+                const matrix = [];
+                const detailsMap = new Map();
+                const projectPrograms = new Map();
+
+                // Create project to program mapping
+                data.forEach(d => {
+                    projectPrograms.set(d['Project Name'], d['Program Name']);
+                });
+
+                projects.forEach((project, pIdx) => {
+                    capabilities.forEach((capability, cIdx) => {
+                        const entries = data.filter(d => 
+                            d['Project Name'] === project && 
+                            `${d['Capability Domain']}: ${d['Capability Name']}` === capability
+                        );
+                        if(entries.length) {
+                            matrix.push([pIdx, cIdx, entries.length]);
+                            // Include both project name and program name in detailsMap
+                            detailsMap.set(`${pIdx}-${cIdx}`, [
+                                `${project}`,
+                                `Program: ${projectPrograms.get(project)}`
+                            ]);
+                        }
+                    });
+                });
+
+                return { 
+                    programs: projects, 
+                    capabilities, 
+                    matrix, 
+                    detailsMap,
+                    projectPrograms 
+                };
+            } else {
+                // Existing program view logic
             const programs = [...new Set(data.map(d => d['Program Name']))];
             const capabilities = [...new Set(data.map(d => `${d['Capability Domain']}: ${d['Capability Name']}`))];
             const matrix = [];
@@ -315,13 +994,14 @@
                         `${d['Capability Domain']}: ${d['Capability Name']}` === capability
                     );
                     if(entries.length) {
-                        matrix.push([pIdx, cIdx, entries.length, entries.map(e => e['Project Name'])]);
+                        matrix.push([pIdx, cIdx, entries.length]);
                         detailsMap.set(`${pIdx}-${cIdx}`, entries.map(e => e['Project Name']));
                     }
                 });
             });
 
             return { programs, capabilities, matrix, detailsMap };
+        }
         }
 
         function updateSankeyDiagram() {
@@ -395,6 +1075,8 @@
                     type: 'sankey',
                     data: nodes,
                     links: links,
+                    nodeWidth: Math.round(20 * sankeyZoomLevel),
+                    nodeGap: Math.round(8 * sankeyZoomLevel),
                     emphasis: {
                         focus: 'adjacency'
                     },
@@ -768,19 +1450,6 @@
                 series: [{
                     type: 'graph',
                     layout: 'circular',
-                    symbolSize: 40,
-                    circular: {
-                        rotateLabel: true
-                    },
-                    label: {
-                        show: true,
-                        position: 'right',
-                        formatter: (params) => params.data.name.split(' ')[0]
-                    },
-                    edgeLabel: {
-                        show: true,
-                        formatter: '{c}'
-                    },
                     data: programs.map(prog => ({
                         name: prog,
                         itemStyle: {
@@ -1080,6 +1749,445 @@
             });
 
             window.addEventListener('resize', () => networkChart.resize());
+        }
+
+        function zoomSankey(factor) {
+            sankeyZoomLevel *= factor;
+            sankeyZoomLevel = Math.max(0.5, Math.min(2, sankeyZoomLevel)); // Limit zoom between 0.5x and 2x
+            
+            if (sankeyChart) {
+                const option = sankeyChart.getOption();
+                option.series[0].nodeWidth = Math.round(20 * sankeyZoomLevel);
+                option.series[0].nodeGap = Math.round(8 * sankeyZoomLevel);
+                sankeyChart.setOption(option);
+            }
+        }
+
+        document.querySelector('.menu-button').addEventListener('click', () => {
+            document.querySelector('.menu').classList.toggle('active');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.matches('.menu-button') && !e.target.matches('.menu') && !e.target.matches('.menu-item')) {
+                document.querySelector('.menu').classList.remove('active');
+            }
+        });
+
+        function showHowTo() {
+            document.querySelector('.dialog-overlay').style.display = 'block';
+            document.querySelector('.menu').classList.remove('active');
+        }
+
+        function hideDialog() {
+            document.querySelector('.dialog-overlay').style.display = 'none';
+        }
+
+        document.querySelector('.dialog-overlay').addEventListener('click', (e) => {
+            if (e.target === document.querySelector('.dialog-overlay')) {
+                hideDialog();
+            }
+        });
+
+        function showAbout() {
+            document.getElementById('aboutDialog').style.display = 'block';
+            document.querySelector('.menu').classList.remove('active');
+        }
+
+        function hideAbout() {
+            document.getElementById('aboutDialog').style.display = 'none';
+        }
+
+        document.querySelectorAll('.dialog-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.style.display = 'none';
+                }
+            });
+        });
+
+        function updateMetrics() {
+            // Calculate basic counts
+            const programs = new Set(allData.map(item => item['Program Name']));
+            const projects = new Set(allData.map(item => item['Project Name']));
+            const capabilities = new Set(allData.map(item => `${item['Capability Domain']}: ${item['Capability Name']}`));
+            const teams = new Set(teamMappings.map(item => item['Team Name']));
+
+            // Calculate project capabilities
+            const projectCapabilities = new Map();
+            allData.forEach(item => {
+                const key = item['Project Name'];
+                if (!projectCapabilities.has(key)) {
+                    projectCapabilities.set(key, new Set());
+                }
+                projectCapabilities.get(key).add(`${item['Capability Domain']}: ${item['Capability Name']}`);
+            });
+
+            // Calculate program metrics
+            const programMetrics = new Map();
+            allData.forEach(item => {
+                const program = item['Program Name'];
+                if (!programMetrics.has(program)) {
+                    programMetrics.set(program, {
+                        projects: new Set(),
+                        capabilities: new Set(),
+                        teams: new Set()
+                    });
+                }
+                const metrics = programMetrics.get(program);
+                metrics.projects.add(item['Project Name']);
+                metrics.capabilities.add(`${item['Capability Domain']}: ${item['Capability Name']}`);
+            });
+
+            // Add teams to program metrics if team mapping exists
+            if (teamMappings.length > 0) {
+                teamMappings.forEach(mapping => {
+                    allData.forEach(item => {
+                        if (item['Capability Domain'] === mapping['Capability Domain'] &&
+                            item['Capability Name'] === mapping['Capability Name']) {
+                            const metrics = programMetrics.get(item['Program Name']);
+                            if (metrics) {
+                                metrics.teams.add(mapping['Team Name']);
+                            }
+                        }
+                    });
+                });
+            }
+
+            // Calculate averages
+            const avgProjectsPerProgram = programs.size ? (projects.size / programs.size).toFixed(1) : '-';
+            const avgCapabilitiesPerProgram = programs.size ? (capabilities.size / programs.size).toFixed(1) : '-';
+            const avgTeamsPerProgram = programs.size && teams.size ? (teams.size / programs.size).toFixed(1) : '-';
+
+            // Get top 10 projects
+            const topProjectsByCapabilities = Array.from(projectCapabilities.entries())
+                .map(([name, caps]) => ({ name, count: caps.size }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 10);
+
+            const topProjectsByBudget = Array.from(new Set(allData.map(item => item['Project Name'])))
+                .map(project => {
+                    const budget = allData.find(item => item['Project Name'] === project)['Total Cost Estimation'];
+                    const parsedBudget = parseInt(budget.replace('€', '').replace(/\./g, '').replace(',', '.'));
+                    return {
+                        name: project,
+                        budget: parsedBudget
+                    };
+                })
+                .filter(project => !isNaN(project.budget))
+                .sort((a, b) => b.budget - a.budget)
+                .slice(0, 10);
+
+            // Update DOM with basic metrics
+            document.getElementById('programCount').textContent = programs.size;
+            document.getElementById('projectCount').textContent = projects.size;
+            document.getElementById('capabilityCount').textContent = capabilities.size;
+            document.getElementById('teamCount').textContent = teamMappings.length ? teams.size : '-';
+            document.getElementById('avgProjectsPerProgram').textContent = avgProjectsPerProgram;
+            document.getElementById('avgCapabilitiesPerProgram').textContent = avgCapabilitiesPerProgram;
+            document.getElementById('avgTeamsPerProgram').textContent = teamMappings.length ? avgTeamsPerProgram : '-';
+
+            // Update rankings tab
+            document.getElementById('topProjectsByCapabilities').innerHTML = topProjectsByCapabilities
+                .map((proj, idx) => {
+                    let medal = '';
+                    let rankClass = '';
+                    
+                    if (idx === 0) {
+                        medal = '🥇';
+                        rankClass = 'gold';
+                    } else if (idx === 1) {
+                        medal = '🥈';
+                        rankClass = 'silver';
+                    } else if (idx === 2) {
+                        medal = '🥉';
+                        rankClass = 'bronze';
+                    }
+
+                    return `
+                        <div class="project-item">
+                            <div class="project-rank ${rankClass}">
+                                ${medal ? `<span class="medal">${medal}</span>` : `#${idx + 1}`}
+                                <span>${proj.name}</span>
+                            </div>
+                            <div class="project-capabilities">
+                                ${proj.count} capabilities
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            document.getElementById('topProjectsByBudget').innerHTML = topProjectsByBudget
+                .map((proj, idx) => {
+                    let medal = '';
+                    let rankClass = '';
+                    
+                    if (idx === 0) {
+                        medal = '🥇';
+                        rankClass = 'gold';
+                    } else if (idx === 1) {
+                        medal = '🥈';
+                        rankClass = 'silver';
+                    } else if (idx === 2) {
+                        medal = '🥉';
+                        rankClass = 'bronze';
+                    }
+
+                    return `
+                        <div class="project-item">
+                            <div class="project-rank ${rankClass}">
+                                ${medal ? `<span class="medal">${medal}</span>` : `#${idx + 1}`}
+                                <span>${proj.name}</span>
+                            </div>
+                            <div class="project-capabilities">
+                                ${proj.budget.toLocaleString('de-DE')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+        }
+
+        // Update the DOMContentLoaded event handler
+        document.addEventListener('DOMContentLoaded', () => {
+            if (allData.length === 0) {
+                document.getElementById('programCoach').style.display = 'block';
+                // Set timeout to hide coaches after 15 seconds
+                coachMarkTimeout = setTimeout(() => {
+                    document.getElementById('programCoach').style.display = 'none';
+                    document.getElementById('teamCoach').style.display = 'none';
+                }, 15000);
+            }
+        });
+
+        // Update the updateCoachMarks function
+        function updateCoachMarks() {
+            const programCoach = document.getElementById('programCoach');
+            const teamCoach = document.getElementById('teamCoach');
+
+            // Clear existing timeout if any
+            if (coachMarkTimeout) {
+                clearTimeout(coachMarkTimeout);
+            }
+
+            if (allData.length === 0) {
+                programCoach.style.display = 'block';
+                teamCoach.style.display = 'none';
+                // Set new timeout
+                coachMarkTimeout = setTimeout(() => {
+                    programCoach.style.display = 'none';
+                    teamCoach.style.display = 'none';
+                }, 15000);
+            } else if (allData.length > 0 && teamMappings.length === 0) {
+                programCoach.style.display = 'none';
+                teamCoach.style.display = 'block';
+                // Set new timeout
+                coachMarkTimeout = setTimeout(() => {
+                    teamCoach.style.display = 'none';
+                }, 15000);
+            } else {
+                programCoach.style.display = 'none';
+                teamCoach.style.display = 'none';
+                // Clear timeout as it's no longer needed
+                if (coachMarkTimeout) {
+                    clearTimeout(coachMarkTimeout);
+                    coachMarkTimeout = null;
+                }
+            }
+        }
+
+        // Add event listener for toggle
+        document.getElementById('viewToggle').addEventListener('change', updateChart);
+
+        // Add phase progression mapping
+        const PHASE_PROGRESS = {
+            'Ideation': 10,
+            'Intake': 20,
+            'Initiation': 30,
+            'Implementation': 50,
+            'User Acceptance': 80,
+            'Production': 100
+        };
+
+        function updateGanttChart() {
+            if (!allData.length) return;
+            
+            const ganttContainer = document.getElementById('ganttContainer');
+            ganttContainer.innerHTML = '';
+            ganttContainer.style.display = 'flex';
+            ganttContainer.style.flexDirection = 'column';
+            ganttContainer.style.gap = '30px';
+            ganttContainer.style.padding = '20px';
+            ganttContainer.style.overflowY = 'auto';
+
+            // Get all unique delivery periods and sort them
+            const allPeriods = [...new Set(allData.map(item => item['Delivery Period']))].sort();
+            const periodToIndex = new Map(allPeriods.map((period, index) => [period, index]));
+            const totalPeriods = allPeriods.length;
+
+            // Group projects by program
+            const programProjects = new Map();
+            allData.forEach(item => {
+                if (!programProjects.has(item['Program Name'])) {
+                    programProjects.set(item['Program Name'], new Set());
+                }
+                programProjects.get(item['Program Name']).add(item['Project Name']);
+            });
+
+            // Create a chart for each program
+            programProjects.forEach((projectSet, program) => {
+                const chartDiv = document.createElement('div');
+                chartDiv.style.width = '100%';
+                chartDiv.style.height = '300px';
+                chartDiv.style.background = 'white';
+                chartDiv.style.borderRadius = '8px';
+                chartDiv.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                ganttContainer.appendChild(chartDiv);
+
+                const chart = echarts.init(chartDiv);
+                
+                // Prepare data for this program's projects
+                const projects = Array.from(projectSet).map(project => {
+                    const projectData = allData.find(item => item['Project Name'] === project);
+                    const progress = PHASE_PROGRESS[projectData['Phase']] || 0;
+                    const periodIndex = periodToIndex.get(projectData['Delivery Period']);
+                    
+                    return {
+                        name: project,
+                        value: [periodIndex, progress],  // [start position, progress percentage]
+                        itemStyle: {
+                            color: '#91cc75'
+                        },
+                        label: {
+                            show: true,
+                            position: 'right',
+                            formatter: `{b} (${progress}%)`
+                        },
+                        period: projectData['Delivery Period'],
+                        phase: projectData['Phase']
+                    };
+                });
+
+                const option = {
+                    title: {
+                        text: program,
+                        left: 'center',
+                        top: 10,
+                        textStyle: {
+                            fontSize: 16,
+                            fontWeight: 'bold'
+                        }
+                    },
+                    tooltip: {
+                        formatter: params => {
+                            return `${params.name}<br/>
+                                Delivery Period: ${params.data.period}<br/>
+                                Phase: ${params.data.phase}<br/>
+                                Progress: ${params.data.value[1]}%`;
+                        }
+                    },
+                    grid: {
+                        left: 200,
+                        right: 100,
+                        top: 50,
+                        bottom: 50,
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: allPeriods,
+                        axisLabel: {
+                            rotate: 45,
+                            interval: 0
+                        }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: projects.map(p => p.name),
+                        axisLabel: {
+                            width: 180,
+                            overflow: 'break',
+                            interval: 0
+                        }
+                    },
+                    series: [{
+                        type: 'custom',
+                        renderItem: (params, api) => {
+                            const periodIndex = api.value(0);
+                            const progress = api.value(1);
+                            const start = api.coord([periodIndex, api.value(2)]);
+                            const width = api.size([1, 0])[0] * 0.8;  // 80% of period width
+                            const height = api.size([0, 1])[1] * 0.6; // 60% of category height
+                            
+                            // Progress bar background
+                            const rectBg = {
+                                type: 'rect',
+                                shape: {
+                                    x: start[0],
+                                    y: start[1] - height/2,
+                                    width: width,
+                                    height: height
+                                },
+                                style: {
+                                    fill: '#f0f0f0'
+                                }
+                            };
+                            
+                            // Progress bar
+                            const rectProgress = {
+                                type: 'rect',
+                                shape: {
+                                    x: start[0],
+                                    y: start[1] - height/2,
+                                    width: width * (progress/100),
+                                    height: height
+                                },
+                                style: {
+                                    fill: '#91cc75'
+                                }
+                            };
+
+                            // Progress text
+                            const text = {
+                                type: 'text',
+                                style: {
+                                    text: progress + '%',
+                                    textAlign: 'center',
+                                    fill: '#000',
+                                    x: start[0] + width/2,
+                                    y: start[1]
+                                }
+                            };
+
+                            return {
+                                type: 'group',
+                                children: [rectBg, rectProgress, text]
+                            };
+                        },
+                        dimensions: [
+                            {name: 'period', type: 'number'},
+                            {name: 'progress', type: 'number'},
+                            {name: 'index', type: 'number'}
+                        ],
+                        encode: {
+                            x: 'period',
+                            y: 'index'
+                        },
+                        data: projects.map((p, idx) => ({
+                            value: [p.value[0], p.value[1], idx],
+                            itemStyle: p.itemStyle,
+                            period: p.period,
+                            phase: p.phase
+                        }))
+                    }]
+                };
+
+                chart.setOption(option);
+                
+                // Handle resize
+                const resizeObserver = new ResizeObserver(() => {
+                    chart.resize();
+                });
+                resizeObserver.observe(chartDiv);
+            });
         }
     </script>
 </body>
