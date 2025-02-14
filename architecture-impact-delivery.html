@@ -556,6 +556,7 @@
             <button class="tab-button active" data-tab="heatmap">Capability Heatmap</button>
             <button class="tab-button" data-tab="sankey">Dependency Flow</button>
             <button class="tab-button" data-tab="hierarchy">Program Hierarchy</button>
+            <button class="tab-button" data-tab="capabilityHierarchy">Capability Hierarchy</button>
             <button class="tab-button" data-tab="budget">Estimated Program Budgets</button>
             <button class="tab-button" data-tab="capabilityBudget">Estimated Capability Budgets</button>
             <button class="tab-button" data-tab="dependencies">Program Dependencies</button>
@@ -583,6 +584,9 @@
         </div>
         <div id="hierarchyTab" class="tab-content">
             <div id="circlePackingContainer" style="width: 100%; height: 100%;"></div>
+        </div>
+        <div id="capabilityHierarchyTab" class="tab-content">
+            <div id="capabilityCirclePackingContainer" style="width: 100%; height: 100%;"></div>
         </div>
         <div id="budgetTab" class="tab-content">
             <div id="budgetContainer" style="width: 100%; height: 100%; display: flex; flex-wrap: wrap;"></div>
@@ -844,6 +848,9 @@
                         sankeyChart.resize();
                     } else if (button.dataset.tab === 'hierarchy' && circlePackingChart) {
                         circlePackingChart.resize();
+                    } else if (button.dataset.tab === 'capabilityHierarchy') {
+                        // Force full redraw of capability hierarchy
+                        updateCapabilityCirclePacking(true);
                     } else if (button.dataset.tab === 'budget') {
                         const budgetCharts = document.querySelectorAll('#budgetContainer > div');
                         budgetCharts.forEach(div => {
@@ -864,7 +871,7 @@
                             renderResourceHeatmap();
                         }
                     }
-                }, 50);
+                }, 100);  // Increased timeout to ensure DOM is ready
             });
         });
 
@@ -948,6 +955,7 @@
                 updateBudgetCharts();
                 updateProgramDependencies();
                 updateProgramCapabilityNetwork();
+                updateCapabilityCirclePacking();
                 const budgetBtn = document.querySelector('[data-tab="budget"]');
                 const dependenciesBtn = document.querySelector('[data-tab="dependencies"]');
                 const networkBtn = document.querySelector('[data-tab="network"]');
@@ -2819,6 +2827,155 @@
             if (myChart) myChart.resize();
             if (sankeyChart) sankeyChart.resize();
             if (circlePackingChart) circlePackingChart.resize();
+            if (dependenciesChart) dependenciesChart.resize();
+            if (networkChart) networkChart.resize();
+            if (capabilityBudgetChart) capabilityBudgetChart.resize();
+            if (resourceState.chart) resourceState.chart.resize();
+        });
+
+        let capabilityCirclePackingChart = null;
+
+        function updateCapabilityCirclePacking(forceRedraw = false) {
+            const container = document.getElementById('capabilityCirclePackingContainer');
+            
+            if (!container) return;
+            
+            // Ensure container is visible and sized before initialization
+            container.style.display = 'block';
+            container.style.width = '100%';
+            container.style.height = '100%';
+            
+            // Force reflow
+            container.getBoundingClientRect();
+
+            if (capabilityCirclePackingChart) {
+                capabilityCirclePackingChart.dispose();
+                capabilityCirclePackingChart = null;
+            }
+            
+            // Wait for container to be properly sized
+            setTimeout(() => {
+                capabilityCirclePackingChart = echarts.init(container);
+                
+                // Build hierarchy data starting from capabilities
+                const hierarchyData = {
+                    name: 'Capabilities',
+                    children: []
+                };
+                
+                // Group by capabilities first
+                const capabilityMap = new Map();
+                
+                allData.forEach(item => {
+                    const capability = item['Capability Name'];
+                    if (!capabilityMap.has(capability)) {
+                        capabilityMap.set(capability, new Map());
+                    }
+                    
+                    const programMap = capabilityMap.get(capability);
+                    const program = item['Program Name'];
+                    
+                    if (!programMap.has(program)) {
+                        programMap.set(program, new Set());
+                    }
+                    
+                    programMap.get(program).add(item['Project Name']);
+                });
+                
+                // Convert to hierarchical structure
+                hierarchyData.children = Array.from(capabilityMap.entries()).map(([capability, programs]) => ({
+                    name: capability,
+                    value: Array.from(programs.values()).reduce((sum, projects) => sum + projects.size, 0),
+                    children: Array.from(programs.entries()).map(([program, projects]) => ({
+                        name: program,
+                        value: projects.size,
+                        children: Array.from(projects).map(project => ({
+                            name: project,
+                            value: 1
+                        }))
+                    }))
+                }));
+
+                const option = {
+                    title: {
+                        text: 'Capability Hierarchy View',
+                        left: 'center',
+                        top: '20px'
+                    },
+                    tooltip: {
+                        formatter: function (info) {
+                            const value = info.value;
+                            const treePathInfo = info.treePathInfo;
+                            const treePath = [];
+                            
+                            for (let i = 1; i < treePathInfo.length; i++) {
+                                treePath.push(treePathInfo[i].name);
+                            }
+                            
+                            return [
+                                '<div class="tooltip-title">' + treePath.join(' > ') + '</div>',
+                                value ? (treePath.length === 1 ? 'Total Projects: ' : 'Projects: ') + value : ''
+                            ].join('');
+                        }
+                    },
+                    series: [{
+                        type: 'treemap',
+                        data: [hierarchyData],
+                        leafDepth: 3,  // Show all levels
+                        drillDownIcon: '▶',
+                        roam: false,
+                        nodeClick: 'zoomToNode',
+                        breadcrumb: {
+                            show: true,
+                            height: 30
+                        },
+                        upperLabel: {
+                            show: true,
+                            height: 30
+                        },
+                        levels: [
+                            {
+                                itemStyle: {
+                                    borderWidth: 3,
+                                    gapWidth: 3,
+                                    borderColor: '#333',
+                                    borderRadius: 3
+                                }
+                            },
+                            {
+                                itemStyle: {
+                                    borderWidth: 2,
+                                    gapWidth: 2,
+                                    borderColor: '#666',
+                                    borderRadius: 2
+                                }
+                            },
+                            {
+                                itemStyle: {
+                                    borderWidth: 1,
+                                    gapWidth: 1,
+                                    borderColor: '#999',
+                                    borderRadius: 1
+                                }
+                            }
+                        ]
+                    }]
+                };
+
+                capabilityCirclePackingChart.setOption(option);
+                
+                if (forceRedraw) {
+                    capabilityCirclePackingChart.resize();
+                }
+            }, 50);
+        }
+
+        // Add to window resize handler
+        window.addEventListener('resize', () => {
+            if (myChart) myChart.resize();
+            if (sankeyChart) sankeyChart.resize();
+            if (circlePackingChart) circlePackingChart.resize();
+            if (capabilityCirclePackingChart) capabilityCirclePackingChart.resize();
             if (dependenciesChart) dependenciesChart.resize();
             if (networkChart) networkChart.resize();
             if (capabilityBudgetChart) capabilityBudgetChart.resize();
