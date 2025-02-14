@@ -629,6 +629,10 @@
                     <h3>Top 10 Projects by Budget</h3>
                     <div class="top-projects-list" id="topProjectsByBudget"></div>
                 </div>
+                <div class="ranking-section">
+                    <h3>Top 10 Most Impacted Teams</h3>
+                    <div class="top-projects-list" id="topTeamsByProjects"></div>
+                </div>
             </div>
         </div>
         <div id="ganttTab" class="tab-content">
@@ -2013,6 +2017,31 @@
                 .sort((a, b) => b.budget - a.budget)
                 .slice(0, 10);
 
+            // Calculate team impact by projects
+            const teamProjectsMap = new Map();
+            if (teamMappings.length > 0) {
+                teamMappings.forEach(mapping => {
+                    allData.forEach(item => {
+                        if (item['Capability Domain'] === mapping['Capability Domain'] &&
+                            item['Capability Name'] === mapping['Capability Name']) {
+                            if (!teamProjectsMap.has(mapping['Team Name'])) {
+                                teamProjectsMap.set(mapping['Team Name'], new Set());
+                            }
+                            teamProjectsMap.get(mapping['Team Name']).add(item['Project Name']);
+                        }
+                    });
+                });
+            }
+
+            // Get top 10 teams by project count
+            const topTeamsByProjects = Array.from(teamProjectsMap.entries())
+                .map(([team, projects]) => ({
+                    name: team,
+                    count: projects.size
+                }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 10);
+
             // Update DOM with basic metrics
             document.getElementById('programCount').textContent = programs.size;
             document.getElementById('projectCount').textContent = projects.size;
@@ -2076,6 +2105,36 @@
                             </div>
                             <div class="project-capabilities">
                                 ${proj.budget.toLocaleString('de-DE')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            // Update top teams ranking
+            document.getElementById('topTeamsByProjects').innerHTML = topTeamsByProjects
+                .map((team, idx) => {
+                    let medal = '';
+                    let rankClass = '';
+                    
+                    if (idx === 0) {
+                        medal = '🥇';
+                        rankClass = 'gold';
+                    } else if (idx === 1) {
+                        medal = '🥈';
+                        rankClass = 'silver';
+                    } else if (idx === 2) {
+                        medal = '🥉';
+                        rankClass = 'bronze';
+                    }
+
+                    return `
+                        <div class="project-item">
+                            <div class="project-rank ${rankClass}">
+                                ${medal ? `<span class="medal">${medal}</span>` : `#${idx + 1}`}
+                                <span>${team.name}</span>
+                            </div>
+                            <div class="project-capabilities">
+                                ${team.count} projects
                             </div>
                         </div>
                     `;
