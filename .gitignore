@@ -57,3 +57,11 @@ pids/
 # Temporary files
 tmp/
 temp/
+
+# Coverage directory
+coverage/
+
+# Keep Excel files
+!*.xlsx
+!data/*.xlsx
+!data/

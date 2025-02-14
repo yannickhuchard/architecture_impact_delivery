@@ -444,6 +444,27 @@
             height: calc(90vh - 40px);
             margin-bottom: 40px;
         }
+
+        .resource-charts-container {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: calc(100vh - 200px);  /* Ensure container has height */
+            width: 100%;
+            position: relative;
+        }
+
+        #resourceAllocationChart, #resourceHeatmapChart {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            min-height: 600px;  /* Ensure minimum height */
+            flex: 1;  /* Take remaining space */
+            width: 100% !important;  /* Force width */
+            height: 600px !important;  /* Force height */
+            position: relative;
+        }
     </style>
 </head>
 <body>
@@ -463,6 +484,13 @@
             <input type="file" id="teamMappingInput" accept=".xlsx">
             <div id="teamCoach" class="coach-mark">
                 2: Load the Team-Capabilities mapping file
+            </div>
+        </div>
+        <div class="filter-group">
+            <label>Resource Files:</label>
+            <input type="file" id="resourcesInput" multiple accept=".xlsx">
+            <div id="resourceCoach" class="coach-mark">
+                3: Load the project resource allocation files
             </div>
         </div>
         <div class="filter-group period-controls">
@@ -509,6 +537,18 @@
             <div class="metric-title">Avg Teams/Program</div>
             <div class="metric-value" id="avgTeamsPerProgram">-</div>
         </div>
+        <div class="metric-card">
+            <div class="metric-title">Total Resources</div>
+            <div class="metric-value" id="totalResources">-</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Avg Resources/Project</div>
+            <div class="metric-value" id="avgResourcesPerProject">-</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Total Estimated Man/Days</div>
+            <div class="metric-value" id="totalManDays">-</div>
+        </div>
     </div>
 
     <div class="tab-container">
@@ -521,6 +561,7 @@
             <button class="tab-button" data-tab="network">Program-Capability Network</button>
             <button class="tab-button" data-tab="rankings">Top 10 Rankings</button>
             <button class="tab-button" data-tab="gantt">Delivery Timeline</button>
+            <button class="tab-button" data-tab="resourcesTab">Resource Allocation</button>
         </div>
         <div id="heatmapTab" class="tab-content active">
             <div class="view-toggle">
@@ -593,6 +634,11 @@
         <div id="ganttTab" class="tab-content">
             <div id="ganttContainer" style="width: 100%; height: calc(100vh - 200px);"></div>
         </div>
+        <div id="resourcesTab" class="tab-content">
+            <div class="resource-charts-container">
+                <div id="resourceHeatmapChart" style="width: 100%; height: 600px;"></div>
+            </div>
+        </div>
     </div>
 
     <button class="menu-button">☰ Menu</button>
@@ -623,6 +669,13 @@
                         <li>Select the Excel file containing team-to-capability mappings</li>
                     </ul>
                 </li>
+                <li><strong>Load Resource Files (Optional):</strong>
+                    <ul>
+                        <li>Click "Choose Files" under "Resource Files"</li>
+                        <li>Select one or multiple Excel files containing project resource allocations</li>
+                        <li>Resource files provide insights into human resource distribution and effort estimation</li>
+                    </ul>
+                </li>
             </ol>
 
             <h3>Available Views</h3>
@@ -633,6 +686,42 @@
                 <li><strong>Estimated Budgets:</strong> Shows budget distribution across programs and projects</li>
                 <li><strong>Program Dependencies:</strong> Highlights shared capabilities between programs</li>
                 <li><strong>Program-Capability Network:</strong> Interactive network view of all relationships</li>
+                <li><strong>Resource Allocation:</strong> Displays resource distribution across programs by job function</li>
+            </ul>
+
+            <h3>Resource Allocation Insights</h3>
+            <ul>
+                <li><strong>Resource Heatmap:</strong> Visual representation of resource distribution showing:
+                    <ul>
+                        <li>Job function concentration across programs</li>
+                        <li>Resource allocation patterns</li>
+                        <li>Potential resource bottlenecks</li>
+                    </ul>
+                </li>
+                <li><strong>Resource Metrics:</strong>
+                    <ul>
+                        <li>Total Resources: Overall count of allocated resources</li>
+                        <li>Average Resources per Project: Resource distribution ratio</li>
+                        <li>Total Estimated Man/Days: Cumulative effort estimation</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <h3>Features</h3>
+            <ul>
+                <li><strong>Period Filtering:</strong> Filter data by quarter or month</li>
+                <li><strong>Interactive Visualizations:</strong> Hover for details, zoom, and pan</li>
+                <li><strong>Metrics Dashboard:</strong> Key statistics and portfolio overview</li>
+                <li><strong>Resource Analytics:</strong> Human resource allocation analysis and effort estimation</li>
+            </ul>
+
+            <h3>Tips</h3>
+            <ul>
+                <li>Use the period filter to focus on specific timeframes</li>
+                <li>Hover over visualizations for detailed information</li>
+                <li>Switch between views using the tab navigation</li>
+                <li>Monitor resource distribution patterns to identify potential staffing issues</li>
+                <li>Use the resource heatmap to optimize job function allocation across programs</li>
             </ul>
 
             <h3>Sample Files</h3>
@@ -706,9 +795,17 @@
         let networkChart = null;
         let sankeyZoomLevel = 1;
         let coachMarkTimeout = null;
+        let ganttChart = null;
+        // Resource allocation state
+        const resourceState = {
+            chart: null,
+            data: [],
+            initialized: false
+        };
 
         document.getElementById('xlsxInput').addEventListener('change', handleFile);
         document.getElementById('teamMappingInput').addEventListener('change', handleTeamMapping);
+        document.getElementById('resourcesInput').addEventListener('change', handleResourceFiles);
         document.getElementById('periodType').addEventListener('change', updatePeriodSelect);
         document.getElementById('periodSelect').addEventListener('change', updateVisualizations);
 
@@ -721,10 +818,10 @@
                 
                 // Update tab content visibility
                 document.querySelectorAll('.tab-content').forEach(tab => {
-                    tab.style.display = 'none';  // Change from removing 'active' class
+                    if (tab) tab.style.display = 'none';
                 });
                 const targetTab = document.getElementById(`${button.dataset.tab}Tab`);
-                targetTab.style.display = 'block';  // Change from adding 'active' class
+                if (targetTab) targetTab.style.display = 'block';
                 
                 // Trigger resize for the visible chart
                 setTimeout(() => {
@@ -746,6 +843,13 @@
                         networkChart.resize();
                     } else if (button.dataset.tab === 'gantt' && ganttChart) {
                         ganttChart.resize();
+                    } else if (button.dataset.tab === 'resourcesTab') {
+                        if (!resourceState.initialized) {
+                            setupResourceHeatmap();
+                        }
+                        if (resourceState.data.length > 0) {
+                            renderResourceHeatmap();
+                        }
                     }
                 }, 50);
             });
@@ -805,6 +909,30 @@
             }
         }
 
+        function handleResourceFiles(e) {
+            const files = e.target.files;
+            resourceState.data = [];
+            
+            let filesProcessed = 0;
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const sheetName = workbook.SheetNames[0];
+                    const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+                    resourceState.data.push(...sheetData);
+                    
+                    filesProcessed++;
+                    if (filesProcessed === files.length) {
+                        console.log(`Loaded ${resourceState.data.length} resource records`);
+                        updateResourceMetrics();
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
         function updateVisualizations() {
             if (allData.length > 0) {
                 updateChart();
@@ -812,20 +940,28 @@
                 updateBudgetCharts();
                 updateProgramDependencies();
                 updateProgramCapabilityNetwork();
-                document.querySelector('[data-tab="budget"]').style.display = 'block';
-                document.querySelector('[data-tab="dependencies"]').style.display = 'block';
-                document.querySelector('[data-tab="network"]').style.display = 'block';
+                const budgetBtn = document.querySelector('[data-tab="budget"]');
+                const dependenciesBtn = document.querySelector('[data-tab="dependencies"]');
+                const networkBtn = document.querySelector('[data-tab="network"]');
+                if (budgetBtn) budgetBtn.style.display = 'block';
+                if (dependenciesBtn) dependenciesBtn.style.display = 'block';
+                if (networkBtn) networkBtn.style.display = 'block';
             } else {
-                document.querySelector('[data-tab="budget"]').style.display = 'none';
-                document.querySelector('[data-tab="dependencies"]').style.display = 'none';
-                document.querySelector('[data-tab="network"]').style.display = 'none';
+                const budgetBtn = document.querySelector('[data-tab="budget"]');
+                const dependenciesBtn = document.querySelector('[data-tab="dependencies"]');
+                const networkBtn = document.querySelector('[data-tab="network"]');
+                if (budgetBtn) budgetBtn.style.display = 'none';
+                if (dependenciesBtn) dependenciesBtn.style.display = 'none';
+                if (networkBtn) networkBtn.style.display = 'none';
             }
             
             if (allData.length > 0 && teamMappings.length > 0) {
                 updateSankeyDiagram();
-                document.querySelector('[data-tab="sankey"]').style.display = 'block';
+                const sankeyBtn = document.querySelector('[data-tab="sankey"]');
+                if (sankeyBtn) sankeyBtn.style.display = 'block';
             } else {
-                document.querySelector('[data-tab="sankey"]').style.display = 'none';
+                const sankeyBtn = document.querySelector('[data-tab="sankey"]');
+                if (sankeyBtn) sankeyBtn.style.display = 'none';
             }
         }
 
@@ -1962,6 +2098,7 @@
         function updateCoachMarks() {
             const programCoach = document.getElementById('programCoach');
             const teamCoach = document.getElementById('teamCoach');
+            const resourceCoach = document.getElementById('resourceCoach');
 
             // Clear existing timeout if any
             if (coachMarkTimeout) {
@@ -1971,21 +2108,34 @@
             if (allData.length === 0) {
                 programCoach.style.display = 'block';
                 teamCoach.style.display = 'none';
+                resourceCoach.style.display = 'none';
                 // Set new timeout
                 coachMarkTimeout = setTimeout(() => {
                     programCoach.style.display = 'none';
                     teamCoach.style.display = 'none';
+                    resourceCoach.style.display = 'none';
                 }, 15000);
             } else if (allData.length > 0 && teamMappings.length === 0) {
                 programCoach.style.display = 'none';
                 teamCoach.style.display = 'block';
+                resourceCoach.style.display = 'none';
                 // Set new timeout
                 coachMarkTimeout = setTimeout(() => {
                     teamCoach.style.display = 'none';
+                    resourceCoach.style.display = 'block';
+                }, 15000);
+            } else if (allData.length > 0 && teamMappings.length > 0) {
+                programCoach.style.display = 'none';
+                teamCoach.style.display = 'none';
+                resourceCoach.style.display = 'block';
+                // Set new timeout
+                coachMarkTimeout = setTimeout(() => {
+                    resourceCoach.style.display = 'none';
                 }, 15000);
             } else {
                 programCoach.style.display = 'none';
                 teamCoach.style.display = 'none';
+                resourceCoach.style.display = 'none';
                 // Clear timeout as it's no longer needed
                 if (coachMarkTimeout) {
                     clearTimeout(coachMarkTimeout);
@@ -2188,6 +2338,287 @@
                 });
                 resizeObserver.observe(chartDiv);
             });
+        }
+
+        // Add window resize handler
+        window.addEventListener('resize', () => {
+            // ... existing resize handlers ...
+            if (resourceState.chart) resourceState.chart.resize();
+            if (resourceState.chart && 
+                document.getElementById('resourcesTab').style.display === 'block') {
+                resourceState.chart.resize();
+            }
+        });
+
+        // Add ResizeObserver to handle container size changes
+        const resizeObserver = new ResizeObserver(entries => {
+            if (resourceState.chart) {
+                resourceState.chart.resize();
+            }
+        });
+        
+        // Observe the container
+        const container = document.getElementById('resourceHeatmapChart');
+        if (container) {
+            resizeObserver.observe(container);
+        }
+
+        // New resource heatmap implementation
+        function setupResourceHeatmap() {
+            const container = document.getElementById('resourceHeatmapChart');
+            if (!container) return;
+
+            // Clear existing chart if any
+            if (resourceState.chart) {
+                resourceState.chart.dispose();
+                resourceState.chart = null;
+            }
+
+            // Create new chart
+            resourceState.chart = echarts.init(container);
+
+            // Set up resize handler
+            const resizeObserver = new ResizeObserver(() => {
+                if (resourceState.chart) {
+                    resourceState.chart.resize();
+                }
+            });
+            resizeObserver.observe(container);
+
+            // Initial render if we have data
+            if (resourceState.data.length > 0) {
+                renderResourceHeatmap();
+            }
+
+            resourceState.initialized = true;
+        }
+
+        function renderResourceHeatmap() {
+            console.log('Attempting to render heatmap...');
+            if (!resourceState.chart || !resourceState.data.length) {
+                console.log('Missing chart or data:', {
+                    hasChart: !!resourceState.chart,
+                    dataLength: resourceState.data.length
+                });
+                return;
+            }
+
+            const container = document.getElementById('resourceHeatmapChart');
+            console.log('Container dimensions:', {
+                width: container.clientWidth,
+                height: container.clientHeight,
+                offsetWidth: container.offsetWidth,
+                offsetHeight: container.offsetHeight,
+                style: container.style.display
+            });
+
+            // Process data
+            const heatmapData = {};
+            resourceState.data.forEach(record => {
+                const program = record['Program Name'];
+                const jobFunction = record['Job Function'];
+                
+                if (!program || !jobFunction) return;
+
+                if (!heatmapData[program]) {
+                    heatmapData[program] = {};
+                }
+                if (!heatmapData[program][jobFunction]) {
+                    heatmapData[program][jobFunction] = 0;
+                }
+                heatmapData[program][jobFunction]++;
+            });
+
+            const programs = Object.keys(heatmapData);
+            const jobFunctions = [...new Set(resourceState.data.map(r => r['Job Function']))];
+            const data = [];
+            
+            console.log('Processed data:', {
+                programs: programs.length,
+                jobFunctions: jobFunctions.length,
+                heatmapData
+            });
+
+            programs.forEach((prog, i) => {
+                jobFunctions.forEach((func, j) => {
+                    data.push([i, j, heatmapData[prog][func] || 0]);
+                });
+            });
+
+            // Ensure container is visible and sized
+            container.style.display = 'block';
+            container.style.width = '100%';
+            container.style.height = '600px';
+            
+            // Force reflow
+            container.getBoundingClientRect();
+
+            const option = {
+                title: {
+                    text: 'Program Resource Allocation by Job Function',
+                    left: 'center',
+                    top: 20
+                },
+                tooltip: {
+                    position: 'top',
+                    formatter: function(params) {
+                        return `${programs[params.data[0]]}<br/>${jobFunctions[params.data[1]]}<br/>Resources: ${params.data[2]}`;
+                    }
+                },
+                grid: {
+                    top: '80px',
+                    height: '60%',
+                    left: '15%',
+                    right: '5%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: programs,
+                    splitArea: { show: true },
+                    axisLabel: {
+                        rotate: 45,
+                        interval: 0,
+                        fontSize: 10
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: jobFunctions,
+                    splitArea: { show: true },
+                    axisLabel: {
+                        fontSize: 10
+                    }
+                },
+                visualMap: {
+                    min: 0,
+                    max: Math.max(...data.map(d => d[2])),
+                    calculable: true,
+                    orient: 'horizontal',
+                    left: 'center',
+                    top: '0',
+                    inRange: {
+                        color: ['#ffffff', '#7ec2f3', '#499fff', '#1e90ff', '#0050b3']
+                    }
+                },
+                series: [{
+                    name: 'Resource Allocation',
+                    type: 'heatmap',
+                    data: data,
+                    label: {
+                        show: true,
+                        formatter: function(params) {
+                            return params.data[2] || '';
+                        }
+                    },
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }]
+            };
+
+            try {
+                resourceState.chart.setOption(option);
+                console.log('Chart option set successfully');
+                // Force a resize after setting options
+                setTimeout(() => {
+                    if (resourceState.chart) {
+                        resourceState.chart.resize();
+                        console.log('Chart resized');
+                    }
+                }, 100);
+            } catch (error) {
+                console.error('Error setting chart options:', error);
+            }
+        }
+
+        // Update setupResourceHeatmap to ensure proper initialization
+        function setupResourceHeatmap() {
+            const container = document.getElementById('resourceHeatmapChart');
+            console.log('Setting up heatmap...');
+            if (!container) {
+                console.error('Container not found');
+                return;
+            }
+
+            // Ensure container is visible and sized
+            container.style.display = 'block';
+            container.style.width = '100%';
+            container.style.height = '600px';
+
+            // Clear existing chart if any
+            if (resourceState.chart) {
+                resourceState.chart.dispose();
+                resourceState.chart = null;
+            }
+
+            // Create new chart
+            resourceState.chart = echarts.init(container);
+            console.log('Chart initialized');
+
+            // Initial render if we have data
+            if (resourceState.data.length > 0) {
+                renderResourceHeatmap();
+            }
+
+            resourceState.initialized = true;
+        }
+
+        // Add event listener for resource tab
+        document.querySelector('[data-tab="resourcesTab"]').addEventListener('click', () => {
+            if (!resourceState.data.length) return;
+
+            const container = document.getElementById('resourceHeatmapChart');
+            container.style.width = '100%';
+            container.style.height = '600px';
+            // Force reflow
+            container.getBoundingClientRect();
+            
+            if (resourceState.chart) {
+                resourceState.chart.dispose();
+            }
+            
+            setupResourceHeatmap();
+            
+            // Initial render if we have data
+            if (resourceState.data.length > 0) {
+                renderResourceHeatmap();
+            }
+        });
+
+        function updateResourceMetrics() {
+            // Update total resources count
+            const totalResources = resourceState.data.length;
+            document.getElementById('totalResources').textContent = totalResources.toLocaleString();
+
+            // Calculate average resources per project
+            const uniqueProjects = new Set(resourceState.data.map(r => r['Project Name'])).size;
+            const avgResources = uniqueProjects > 0 ? (totalResources / uniqueProjects).toFixed(1) : 0;
+            document.getElementById('avgResourcesPerProject').textContent = avgResources;
+
+            // Calculate total estimated man/days
+            const totalManDays = resourceState.data.reduce((total, record) => {
+                const manDaysStr = record['Estimated Man/Days'];
+                if (manDaysStr) {
+                    const days = parseFloat(manDaysStr);
+                    return total + (isNaN(days) ? 0 : days);
+                }
+                return total;
+            }, 0);
+
+            console.log('Total Estimated Man/Days calculation:', {
+                sampleRecords: resourceState.data.slice(0, 5).map(r => ({
+                    project: r['Project Name'],
+                    manDays: r['Estimated Man/Days']
+                })),
+                total: totalManDays
+            });
+
+            document.getElementById('totalManDays').textContent = 
+                Math.round(totalManDays).toLocaleString();
         }
     </script>
 </body>

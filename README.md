@@ -1,6 +1,6 @@
 # Enterprise Architecture Impact Analysis Tools
 
-A suite of tools for generating and visualizing enterprise architecture dependencies, focusing on the relationships between programs, projects, capabilities, and teams.
+A suite of tools for generating and visualizing enterprise architecture dependencies, focusing on the relationships between programs, projects, capabilities, teams, and resource allocations.
 
 ## Overview
 
@@ -9,6 +9,8 @@ This toolkit helps enterprise architects and program managers:
 - Map teams to capabilities
 - Visualize dependencies through heatmaps
 - Analyze impact flows through Sankey diagrams
+- Analyze resource allocation across programs
+- Track effort estimation and resource distribution
 
 ## Components
 
@@ -22,10 +24,17 @@ This toolkit helps enterprise architects and program managers:
    - Assigns capabilities to teams based on business and IT domains
    - Creates a consolidated Excel file of all mappings
 
-3. **Impact Visualizer** (`architecture-impact-delivery.html`)
+3. **Resource Allocation Generator** (`generate-project-resources.js`)
+   - Generates resource allocation data for projects
+   - Creates Excel files with job functions and effort estimations
+   - Includes man/days estimations per resource
+
+4. **Impact Visualizer** (`architecture-impact-delivery.html`)
    - Interactive heatmap showing program/project impact on capabilities
    - Sankey diagram displaying program > project > capability > team flow
    - Time-based filtering options
+   - Resource allocation heatmap by job function
+   - Resource metrics and effort estimations
 
 ## Getting Started
 
@@ -61,17 +70,26 @@ node generate-team-to-capabilities.js
 ```
 This creates `teams-to-capabilities.xlsx` in the `data` folder.
 
+3. Generate resource allocation data:
+```bash
+node generate-project-resources.js
+```
+This creates resource allocation Excel files in the `data` folder.
+
 ### Visualization Usage
 
 1. Open `architecture-impact-delivery` in a web browser
 2. Load data files:
    - Click "Project Files" to load program Excel files
    - Click "Team Mapping File" to load teams-to-capabilities.xlsx
+   - Click "Resource Files" to load resource allocation files
 3. Use period filters to view specific timeframes
 4. Interact with visualizations:
    - Hover over heatmap cells to see details
    - Explore Sankey diagram connections
    - Use filters to focus on specific periods
+   - Analyze resource distribution in the Resource Allocation tab
+   - Monitor resource metrics in the dashboard
 
 ## Data Structure
 
@@ -99,6 +117,16 @@ This creates `teams-to-capabilities.xlsx` in the `data` folder.
 }
 ```
 
+### Resource Allocation Excel Files
+```json
+{
+  "Program Name": "string",
+  "Project Name": "string",
+  "Job Function": "string",
+  "Estimated Man/Days": "number"
+}
+```
+
 ## Features
 
 ### Program Generator
@@ -113,12 +141,21 @@ This creates `teams-to-capabilities.xlsx` in the `data` folder.
 - Business and IT capability domains
 - One-to-many team-capability relationships
 
+### Resource Allocation Generator
+- Job function distribution
+- Effort estimation in man/days
+- Project-based resource allocation
+- Multiple resource files support
+
 ### Impact Visualizer
 - Interactive heatmap
 - Sankey diagram
 - Period filtering
 - Responsive design
 - Detailed tooltips
+- Resource allocation heatmap
+- Resource metrics dashboard
+- Effort estimation analytics
 
 ## Development
 
@@ -128,6 +165,7 @@ This creates `teams-to-capabilities.xlsx` in the `data` folder.
 ├── architecture-impact-delivery.html # Visualization interface
 ├── generate-program.js             # Program data generator
 ├── generate-team-to-capabilities.js # Team mapping generator
+├── generate-project-resources.js   # Resource allocation generator
 └── .gitignore                      # Git ignore rules
 ```
 
@@ -176,7 +214,13 @@ This creates `teams-to-capabilities.xlsx` in the `data` folder.
 
 ## License
 
-MIT License
+- Dual License: AGPL-3.0 and Commercial License
+- 
+- This software is available under:
+- - GNU Affero General Public License v3.0 (AGPL-3.0) for non-commercial use
+- - Commercial License requiring explicit written authorization from Yannick HUCHARD
+- 
+- See LICENSE file for details.
 
 ## Support
 
