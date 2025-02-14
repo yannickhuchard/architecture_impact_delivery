@@ -214,12 +214,7 @@ This creates resource allocation Excel files in the `data` folder.
 
 ## License
 
-- Dual License: AGPL-3.0 and Commercial License
-- 
-- This software is available under:
-- - GNU Affero General Public License v3.0 (AGPL-3.0) for non-commercial use
-- - Commercial License requiring explicit written authorization from Yannick HUCHARD
-- 
+- MIT
 - See LICENSE file for details.
 
 ## Support
