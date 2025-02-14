@@ -556,7 +556,8 @@
             <button class="tab-button active" data-tab="heatmap">Capability Heatmap</button>
             <button class="tab-button" data-tab="sankey">Dependency Flow</button>
             <button class="tab-button" data-tab="hierarchy">Program Hierarchy</button>
-            <button class="tab-button" data-tab="budget">Estimated Budgets Overview</button>
+            <button class="tab-button" data-tab="budget">Estimated Program Budgets</button>
+            <button class="tab-button" data-tab="capabilityBudget">Estimated Capability Budgets</button>
             <button class="tab-button" data-tab="dependencies">Program Dependencies</button>
             <button class="tab-button" data-tab="network">Program-Capability Network</button>
             <button class="tab-button" data-tab="rankings">Top 10 Rankings</button>
@@ -585,6 +586,14 @@
         </div>
         <div id="budgetTab" class="tab-content">
             <div id="budgetContainer" style="width: 100%; height: 100%; display: flex; flex-wrap: wrap;"></div>
+        </div>
+        <div id="capabilityBudgetTab" class="tab-content">
+            <div style="padding: 20px;">
+                <select id="capabilityBudgetSelect" style="width: 300px; padding: 8px; margin-bottom: 20px;">
+                    <option value="">Select a Capability</option>
+                </select>
+            </div>
+            <div id="capabilityBudgetContainer" style="width: 100%; height: calc(100% - 80px);"></div>
         </div>
         <div id="dependenciesTab" class="tab-content">
             <div id="dependenciesContainer" style="width: 100%; height: 100%;"></div>
@@ -807,8 +816,8 @@
             initialized: false
         };
 
-        document.getElementById('xlsxInput').addEventListener('change', handleFile);
-        document.getElementById('teamMappingInput').addEventListener('change', handleTeamMapping);
+        document.getElementById('xlsxInput').addEventListener('change', handleFiles);
+        document.getElementById('teamMappingInput').addEventListener('change', handleTeamMappingFile);
         document.getElementById('resourcesInput').addEventListener('change', handleResourceFiles);
         document.getElementById('periodType').addEventListener('change', updatePeriodSelect);
         document.getElementById('periodSelect').addEventListener('change', updateVisualizations);
@@ -867,28 +876,25 @@
             }
         });
 
-        function handleFile(e) {
+        function handleFiles(e) {
+            const files = e.target.files;
             allData = [];
-            const files = Array.from(e.target.files);
-            let filesProcessed = 0;
             
-            files.forEach(file => {
+            let filesProcessed = 0;
+            Array.from(files).forEach(file => {
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = function(e) {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, {type: 'array'});
-                    workbook.SheetNames.forEach(sheetName => {
-                        const sheet = workbook.Sheets[sheetName];
-                        const jsonData = XLSX.utils.sheet_to_json(sheet);
-                        allData = allData.concat(jsonData);
-                    });
+                    const sheetName = workbook.SheetNames[0];
+                    const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+                    allData.push(...sheetData);
                     
                     filesProcessed++;
                     if (filesProcessed === files.length) {
-                        updatePeriodSelect();
-                        updateVisualizations();
                         updateMetrics();
-                        updateGanttChart();
+                        updateVisualizations();
+                        initializeCapabilityBudgetSelect();  // Initialize when project files are loaded
                         updateCoachMarks();
                     }
                 };
@@ -896,21 +902,19 @@
             });
         }
 
-        function handleTeamMapping(e) {
-            teamMappings = [];
+        function handleTeamMappingFile(e) {
             const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    teamMappings = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                    updateVisualizations();
-                    updateMetrics();
-                    updateCoachMarks();
-                };
-                reader.readAsArrayBuffer(file);
-            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const sheetName = workbook.SheetNames[0];
+                teamMappings = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+                
+                updateMetrics();
+                updateVisualizations();
+            };
+            reader.readAsArrayBuffer(file);
         }
 
         function handleResourceFiles(e) {
@@ -2679,6 +2683,147 @@
             document.getElementById('totalManDays').textContent = 
                 Math.round(totalManDays).toLocaleString();
         }
+
+        let capabilityBudgetChart = null;
+
+        function initializeCapabilityBudgetSelect() {
+            console.log('Initializing capability budget select with data length:', allData.length);
+            const select = document.getElementById('capabilityBudgetSelect');
+            const capabilities = new Set(allData.map(item => item['Capability Name']));
+            
+            console.log('Found capabilities:', capabilities.size);
+            
+            select.innerHTML = '<option value="">Select a Capability</option>' +
+                Array.from(capabilities)
+                    .sort()
+                    .map(cap => `<option value="${cap}">${cap}</option>`)
+                    .join('');
+            
+            // Remove existing event listener if any
+            const newSelect = select.cloneNode(true);
+            select.parentNode.replaceChild(newSelect, select);
+            newSelect.addEventListener('change', updateCapabilityBudgetChart);
+
+            console.log('Capability budget select initialized');
+        }
+
+        function updateCapabilityBudgetChart() {
+            const capability = document.getElementById('capabilityBudgetSelect').value;
+            if (!capability) return;
+
+            const container = document.getElementById('capabilityBudgetContainer');
+            
+            if (!capabilityBudgetChart) {
+                capabilityBudgetChart = echarts.init(container);
+            }
+
+            // Get all programs impacting this capability
+            const programData = new Map();
+            allData.forEach(item => {
+                if (item['Capability Name'] === capability) {
+                    const program = item['Program Name'];
+                    // Fix budget parsing
+                    const budgetStr = item['Total Cost Estimation']
+                        .replace('€', '')
+                        .replace(/\s/g, '')  // Remove any whitespace
+                        .replace(/\.(?=.*\.)/g, '')  // Remove all dots except the last one
+                        .replace(',', '');    // Remove comma
+                    const budget = parseFloat(budgetStr);
+                    
+                    console.log('Budget conversion:', {
+                        original: item['Total Cost Estimation'],
+                        processed: budgetStr,
+                        final: budget
+                    });
+                    
+                    if (isNaN(budget)) {
+                        console.warn('Invalid budget format:', item['Total Cost Estimation']);
+                        return;
+                    }
+                    
+                    if (!programData.has(program)) {
+                        programData.set(program, { budget: 0, count: 0 });
+                    }
+                    programData.get(program).budget += budget;
+                    programData.get(program).count++;
+                }
+            });
+
+            const programs = Array.from(programData.entries());
+            const totalBudget = programs.reduce((sum, [_, data]) => sum + data.budget, 0);
+            console.log('Budget summary:', {
+                programCount: programs.length,
+                programBudgets: programs.map(([name, data]) => ({
+                    program: name,
+                    budget: data.budget
+                })),
+                totalBudget: totalBudget
+            });
+
+            const option = {
+                title: {
+                    text: `Budget Distribution for ${capability}`,
+                    subtext: `Total Budget: €${Math.round(totalBudget).toLocaleString('de-DE')}`,
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'item',
+                    formatter: function(params) {
+                        if (params.seriesIndex === 0) {
+                            return `${params.name}<br/>Projects: ${params.value} (${params.percent}%)`;
+                        } else {
+                            return `${params.name}<br/>Budget: €${params.value.toLocaleString('de-DE')} (${params.percent}%)`;
+                        }
+                    }
+                },
+                legend: {
+                    orient: 'vertical',
+                    left: 'left',
+                    top: 'middle'
+                },
+                series: [
+                    {
+                        name: 'Projects',
+                        type: 'pie',
+                        radius: ['0%', '40%'],
+                        center: ['60%', '50%'],
+                        label: {
+                            position: 'inner'
+                        },
+                        data: programs.map(([program, data]) => ({
+                            name: program,
+                            value: data.count
+                        }))
+                    },
+                    {
+                        name: 'Budget',
+                        type: 'pie',
+                        radius: ['50%', '70%'],
+                        center: ['60%', '50%'],
+                        label: {
+                            formatter: '{b}: €{c}'
+                        },
+                        data: programs.map(([program, data]) => ({
+                            name: program,
+                            value: data.budget
+                        }))
+                    }
+                ]
+            };
+
+            capabilityBudgetChart.setOption(option);
+        }
+
+        // Add to window resize handler
+        window.addEventListener('resize', () => {
+            if (myChart) myChart.resize();
+            if (sankeyChart) sankeyChart.resize();
+            if (circlePackingChart) circlePackingChart.resize();
+            if (dependenciesChart) dependenciesChart.resize();
+            if (networkChart) networkChart.resize();
+            if (capabilityBudgetChart) capabilityBudgetChart.resize();
+            if (resourceState.chart) resourceState.chart.resize();
+        });
     </script>
 </body>
 </html>
